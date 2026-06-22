@@ -1,4 +1,4 @@
-# VacaSync — Gestión de Vacaciones de Empleados
+# Canal Directo — Gestión de Vacaciones
 
 Aplicación web moderna y responsive para que una empresa registre, visualice y administre las vacaciones de sus empleados mediante un calendario interactivo.
 
@@ -96,10 +96,14 @@ npm run dev                   # http://localhost:5173
 
 ## 👤 Credenciales de ejemplo
 
+Por defecto, al ejecutar el seed, la base de datos se inicializa con un único usuario administrador:
+
 | Rol | Email | Contraseña |
 |-----|-------|------------|
-| Administrador | `admin@vacasync.com` | `Admin123!` |
-| Empleado | `ana.garcia@vacasync.com` | `Empleado123!` |
+| Administrador | `admin@canaldirecto.com` | `Admin123!` |
+
+> [!NOTE]
+> *(Los usuarios con rol de empleado deben ser creados desde el panel de administración una vez dentro del sistema).*
 
 ## 📖 Documentación de la API
 
