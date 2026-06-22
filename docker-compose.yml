@@ -1,0 +1,51 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: vacasync-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vacasync
+      POSTGRES_PASSWORD: vacasync
+      POSTGRES_DB: vacasync
+    ports:
+      - '5432:5432'
+    volumes:
+      - vacasync_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U vacasync']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: vacasync-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://vacasync:vacasync@db:5432/vacasync?schema=public
+      JWT_ACCESS_SECRET: super-secret-access-change-me
+      JWT_REFRESH_SECRET: super-secret-refresh-change-me
+      JWT_ACCESS_EXPIRES: 15m
+      JWT_REFRESH_EXPIRES: 7d
+      TZ: America/Buenos_Aires
+      CORS_ORIGIN: http://localhost:5173
+      FRONTEND_URL: http://localhost:5173
+    ports:
+      - '4000:4000'
+
+  frontend:
+    build: ./frontend
+    container_name: vacasync-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '5173:80'
+
+volumes:
+  vacasync_db:
