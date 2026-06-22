@@ -9,6 +9,7 @@ import notificationRoutes from './notification.routes';
 import auditRoutes from './audit.routes';
 import holidayRoutes from './holiday.routes';
 import settingsRoutes from './settings.routes';
+import cycleRoutes from './cycle.routes';
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use('/notifications', notificationRoutes);
 router.use('/audit', auditRoutes);
 router.use('/holidays', holidayRoutes);
 router.use('/settings', settingsRoutes);
+router.use('/cycles', cycleRoutes);
 
 export default router;

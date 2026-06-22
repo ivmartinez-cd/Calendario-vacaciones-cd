@@ -19,9 +19,11 @@ export interface Department {
 
 export interface Balance {
   annual: number;
+  carryOver: number;
   used: number;
   pending: number;
   available: number;
+  cycleOpen: boolean;
 }
 
 export interface Employee {
@@ -127,7 +129,25 @@ export interface SystemConfig {
   minAdvanceNoticeDays: number;
   maxOverlapPercent: number;
   maxOverlapCount: number;
+  // Ciclos anuales
+  nextYearOpenMonth: number;
+  nextYearOpenDay: number;
+  allowAdvanceRequest: boolean;
+  maxAdvanceDays: number;
   updatedAt: string;
+}
+
+export interface VacationCycle {
+  id: string;
+  employeeId: string;
+  year: number;
+  annualDays: number;
+  carryOver: number;
+  isOpen: boolean;
+  openedAt: string | null;
+  createdAt: string;
+  employee?: Employee;
+  balance?: Balance;
 }
 
 export interface OverlapData {

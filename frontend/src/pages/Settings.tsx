@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Save, Plus, Trash2, Settings2, Clock, Users } from 'lucide-react';
+import { Save, Plus, Trash2, Settings2, Clock, Users, CalendarClock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api, getErrorMessage } from '@/lib/api';
 import { SystemConfig, SeniorityTier } from '@/types';
@@ -15,7 +15,13 @@ export default function Settings() {
   const [advanceDays, setAdvanceDays] = useState(7);
   const [overlapPercent, setOverlapPercent] = useState(50);
   const [overlapCount, setOverlapCount] = useState(0);
-  const [activeTab, setActiveTab] = useState<'tiers' | 'rules'>('tiers');
+  const [activeTab, setActiveTab] = useState<'tiers' | 'rules' | 'cycles'>('tiers');
+  // Ciclos anuales
+  const [nextYearOpenMonth, setNextYearOpenMonth] = useState(10);
+  const [nextYearOpenDay, setNextYearOpenDay] = useState(1);
+  const [allowAdvanceRequest, setAllowAdvanceRequest] = useState(true);
+  const [maxAdvanceDays, setMaxAdvanceDays] = useState(0);
+  const [openingCycle, setOpeningCycle] = useState(false);
 
   async function load() {
     const { data: cfg } = await api.get<SystemConfig>('/settings');
@@ -24,6 +30,10 @@ export default function Settings() {
     setAdvanceDays(cfg.minAdvanceNoticeDays);
     setOverlapPercent(cfg.maxOverlapPercent);
     setOverlapCount(cfg.maxOverlapCount);
+    setNextYearOpenMonth(cfg.nextYearOpenMonth ?? 10);
+    setNextYearOpenDay(cfg.nextYearOpenDay ?? 1);
+    setAllowAdvanceRequest(cfg.allowAdvanceRequest ?? true);
+    setMaxAdvanceDays(cfg.maxAdvanceDays ?? 0);
   }
 
   useEffect(() => {
@@ -38,6 +48,10 @@ export default function Settings() {
         minAdvanceNoticeDays: advanceDays,
         maxOverlapPercent: overlapPercent,
         maxOverlapCount: overlapCount,
+        nextYearOpenMonth,
+        nextYearOpenDay,
+        allowAdvanceRequest,
+        maxAdvanceDays,
       });
       setConfig(data);
       toast.success('Configuración guardada');
@@ -72,7 +86,21 @@ export default function Settings() {
   const tabs = [
     { id: 'tiers' as const, label: 'Antigüedad y Días', icon: Settings2 },
     { id: 'rules' as const, label: 'Reglas de Solicitud', icon: Clock },
+    { id: 'cycles' as const, label: 'Ciclos Anuales', icon: CalendarClock },
   ];
+
+  async function forceOpenNextYear() {
+    if (!confirm(`¿Abrir el ciclo ${new Date().getFullYear() + 1} para todos los empleados activos?`)) return;
+    setOpeningCycle(true);
+    try {
+      const { data } = await api.post<{ opened: number; skipped: number }>('/cycles/open-next-year');
+      toast.success(`Ciclo ${new Date().getFullYear() + 1} abierto: ${data.opened} empleados nuevos, ${data.skipped} ya abiertos`);
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setOpeningCycle(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -245,6 +273,104 @@ export default function Settings() {
                 </div>
               </div>
             </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Tab: Ciclos Anuales */}
+      {activeTab === 'cycles' && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="p-6">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400">
+                <CalendarClock className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="font-semibold">Apertura del Año Siguiente</h2>
+                <p className="text-sm text-muted-foreground">
+                  Fecha a partir de la cual se habilitan solicitudes del {new Date().getFullYear() + 1}
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Mes de apertura</label>
+                <select
+                  value={nextYearOpenMonth}
+                  onChange={(e) => setNextYearOpenMonth(parseInt(e.target.value))}
+                  className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  {[
+                    [1,'Enero'],[2,'Febrero'],[3,'Marzo'],[4,'Abril'],[5,'Mayo'],[6,'Junio'],
+                    [7,'Julio'],[8,'Agosto'],[9,'Septiembre'],[10,'Octubre'],[11,'Noviembre'],[12,'Diciembre'],
+                  ].map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
+              <Input
+                label="Día"
+                type="number"
+                min={1}
+                max={31}
+                value={nextYearOpenDay}
+                onChange={(e) => setNextYearOpenDay(parseInt(e.target.value) || 1)}
+              />
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              El ciclo {new Date().getFullYear() + 1} se abrirá automáticamente el
+              {' '}<strong>{String(nextYearOpenDay).padStart(2,'0')}/{String(nextYearOpenMonth).padStart(2,'0')}/{new Date().getFullYear()}</strong>.
+            </p>
+          </Card>
+
+          <Card className="p-6">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
+                <CalendarClock className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="font-semibold">Solicitudes Adelantadas</h2>
+                <p className="text-sm text-muted-foreground">Permisos y límites para pedir vacaciones del año siguiente</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={allowAdvanceRequest}
+                  onChange={(e) => setAllowAdvanceRequest(e.target.checked)}
+                  className="h-4 w-4 rounded border-border accent-primary"
+                />
+                <span className="text-sm font-medium">Permitir solicitudes del año siguiente</span>
+              </label>
+              {allowAdvanceRequest && (
+                <div>
+                  <Input
+                    label={`Límite de días adelantados (0 = sin límite)`}
+                    type="number"
+                    min={0}
+                    value={maxAdvanceDays}
+                    onChange={(e) => setMaxAdvanceDays(parseInt(e.target.value) || 0)}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {maxAdvanceDays === 0
+                      ? 'Los empleados pueden pedir hasta el total de su saldo del año siguiente.'
+                      : `Los empleados pueden pedir hasta ${maxAdvanceDays} días por anticipado del año siguiente.`}
+                  </p>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <Card className="p-6 lg:col-span-2">
+            <h2 className="mb-2 font-semibold">Acción Manual</h2>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Fuerza la apertura inmediata del ciclo {new Date().getFullYear() + 1} sin esperar la fecha de apertura automática.
+            </p>
+            <Button variant="outline" onClick={forceOpenNextYear} loading={openingCycle}>
+              <CalendarClock className="h-4 w-4" />
+              Abrir ciclo {new Date().getFullYear() + 1} ahora
+            </Button>
           </Card>
         </div>
       )}

@@ -5,6 +5,7 @@ import { prisma } from '../config/prisma';
 import { ApiError } from '../utils/ApiError';
 import { calendarDaysBetween, addOneDay, toDateString, formatDateAR } from '../utils/dates';
 import { getEmployeeBalance } from '../services/vacation.service';
+import { ensureCycle } from '../services/cycle.service';
 import { recordAudit } from '../services/audit.service';
 import { notifyUser } from '../services/notification.service';
 import { sendMail, buildDecisionEmail } from '../utils/email';
@@ -145,6 +146,39 @@ export async function create(req: Request, res: Response) {
   const days = calendarDaysBetween(body.startDate, body.endDate);
   if (days <= 0) throw ApiError.badRequest('El rango no contiene días laborables');
 
+  // ── Validación de año ──────────────────────────────────────────────────────
+  const targetYear = body.startDate.getFullYear();
+  const currentYear = new Date().getFullYear();
+
+  if (targetYear < currentYear && !isAdmin) {
+    throw ApiError.badRequest('No se pueden registrar vacaciones en años pasados');
+  }
+
+  if (targetYear > currentYear + 1) {
+    throw ApiError.badRequest('No se pueden solicitar vacaciones con más de un año de anticipación');
+  }
+
+  if (targetYear === currentYear + 1) {
+    // Verificar configuración de solicitudes adelantadas
+    const config = await prisma.systemConfig.findUnique({ where: { id: 'singleton' } });
+    if (!config?.allowAdvanceRequest) {
+      throw ApiError.badRequest('Las solicitudes adelantadas al año siguiente no están habilitadas');
+    }
+    // Verificar que el ciclo del año siguiente esté abierto
+    const openMonth = (config?.nextYearOpenMonth ?? 10) - 1;
+    const openDay = config?.nextYearOpenDay ?? 1;
+    const openDate = new Date(Date.UTC(currentYear, openMonth, openDay));
+    if (new Date() < openDate) {
+      const d = `${String(openDay).padStart(2, '0')}/${String(openMonth + 1).padStart(2, '0')}/${currentYear}`;
+      throw ApiError.badRequest(
+        `El ciclo ${targetYear} aún no está abierto. Se habilitará el ${d}`,
+      );
+    }
+    // Asegurarse de que el ciclo existe y está abierto
+    await ensureCycle(employeeId, targetYear);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // Validar superposición con otras solicitudes activas del mismo empleado.
   const overlapping = await prisma.vacationRequest.findFirst({
     where: {
@@ -156,12 +190,26 @@ export async function create(req: Request, res: Response) {
   });
   if (overlapping) throw ApiError.conflict('Ya existe una solicitud que se solapa con esas fechas');
 
-  // Validar saldo disponible.
-  const balance = await getEmployeeBalance(employeeId, body.startDate.getFullYear());
+  // Validar saldo disponible para el año objetivo.
+  const balance = await getEmployeeBalance(employeeId, targetYear);
+  if (!balance.cycleOpen && !isAdmin) {
+    throw ApiError.badRequest(`El ciclo ${targetYear} no está habilitado para recibir solicitudes`);
+  }
   if (days > balance.available) {
     throw ApiError.badRequest(
       `Saldo insuficiente: solicita ${days} días pero sólo dispone de ${balance.available}`,
     );
+  }
+
+  // Aplicar límite de días adelantados si aplica
+  if (targetYear === currentYear + 1) {
+    const config = await prisma.systemConfig.findUnique({ where: { id: 'singleton' } });
+    const maxAdvance = config?.maxAdvanceDays ?? 0;
+    if (maxAdvance > 0 && (balance.used + balance.pending + days) > maxAdvance) {
+      throw ApiError.badRequest(
+        `Límite de solicitudes adelantadas: sólo se permiten ${maxAdvance} días anticipados del año ${targetYear}`,
+      );
+    }
   }
 
   const request = await prisma.vacationRequest.create({

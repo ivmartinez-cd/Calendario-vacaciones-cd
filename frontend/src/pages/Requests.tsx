@@ -196,6 +196,7 @@ export default function Requests() {
       {!isAdmin && balance && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <BalanceCard label="Días anuales" value={balance.annual} />
+          {balance.carryOver > 0 && <BalanceCard label="Arrastrados" value={balance.carryOver} />}
           <BalanceCard label="Consumidos" value={balance.used} />
           <BalanceCard label="Pendientes" value={balance.pending} />
           <BalanceCard label="Disponibles" value={balance.available} highlight />
@@ -264,7 +265,14 @@ export default function Requests() {
                     <td className="px-4 py-3">{r.daysRequested}</td>
                     <td className="max-w-[200px] truncate px-4 py-3 text-muted-foreground">{r.reason || '—'}</td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={r.status} />
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <StatusBadge status={r.status} />
+                        {new Date(r.startDate).getFullYear() > new Date().getFullYear() && (
+                          <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
+                            Anticipada {new Date(r.startDate).getFullYear()}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">

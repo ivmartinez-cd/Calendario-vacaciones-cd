@@ -81,6 +81,7 @@ model Employee {
 
   user             User?
   vacationRequests VacationRequest[]
+  vacationCycles   VacationCycle[]
 }
 
 /// Solicitud de vacaciones de un empleado.
@@ -149,10 +150,35 @@ model Holiday {
 model SystemConfig {
   id                   String   @id @default("singleton")
   seniorityTiers       Json     @default("[{\"minYears\":0,\"maxYears\":0.5,\"days\":7},{\"minYears\":0.5,\"maxYears\":1,\"days\":14},{\"minYears\":1,\"maxYears\":5,\"days\":14},{\"minYears\":5,\"maxYears\":10,\"days\":21},{\"minYears\":10,\"maxYears\":15,\"days\":21},{\"minYears\":15,\"maxYears\":20,\"days\":28},{\"minYears\":20,\"maxYears\":99,\"days\":35}]")
-  minAdvanceNoticeDays Int      @default(7)
-  maxOverlapPercent    Int      @default(50)
-  maxOverlapCount      Int      @default(0)
-  updatedAt            DateTime @updatedAt
+  minAdvanceNoticeDays  Int      @default(7)
+  maxOverlapPercent     Int      @default(50)
+  maxOverlapCount       Int      @default(0)
+  // Configuración de ciclos anuales
+  nextYearOpenMonth     Int      @default(10)   // mes en que abre el ciclo del año siguiente (1-12)
+  nextYearOpenDay       Int      @default(1)    // día del mes
+  allowAdvanceRequest   Boolean  @default(true) // permite solicitudes del año siguiente
+  maxAdvanceDays        Int      @default(0)    // 0 = sin límite; N = máximo días adelantados
+  updatedAt             DateTime @updatedAt
+}
+
+/// Ciclo anual de vacaciones por empleado.
+/// Registra el saldo asignado y si el período está abierto para recibir solicitudes.
+model VacationCycle {
+  id         String    @id @default(uuid())
+  year       Int
+  annualDays Int       // días asignados para este ciclo
+  carryOver  Int       @default(0) // días arrastrados del ciclo anterior
+  isOpen     Boolean   @default(false) // true = acepta solicitudes de este año
+  openedAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId String
+
+  @@unique([employeeId, year])
+  @@index([year])
+  @@index([employeeId])
 }
 
 /// Registro de auditoría de cambios.

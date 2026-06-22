@@ -36,3 +36,6 @@ export function authorize(...roles: Role[]) {
     next();
   };
 }
+
+/** Atajo para restringir solo a administradores. */
+export const requireAdmin = authorize(Role.ADMIN);
