@@ -55,6 +55,7 @@ export interface VacationRequest {
   startDate: string;
   endDate: string;
   daysRequested: number;
+  chargedToYear?: number | null;
   reason: string | null;
   status: RequestStatus;
   createdAt: string;
@@ -136,6 +137,8 @@ export interface SystemConfig {
   nextYearOpenDay: number;
   allowAdvanceRequest: boolean;
   maxAdvanceDays: number;
+  allowCarryOver: boolean;
+  maxCarryOverDays: number;
   updatedAt: string;
 }
 

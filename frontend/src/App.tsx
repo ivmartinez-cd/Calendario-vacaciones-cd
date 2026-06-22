@@ -1,12 +1,15 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { useAuth } from './context/AuthContext';
 import { Spinner } from './components/ui';
 
-// Carga diferida (code-splitting) de cada página.
 const Login = lazy(() => import('./pages/Login'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const Portal = lazy(() => import('./pages/Portal'));
+const AttendancePlaceholder = lazy(() => import('./pages/AttendancePlaceholder'));
+
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const TeamCalendar = lazy(() => import('./pages/TeamCalendar'));
 const Requests = lazy(() => import('./pages/Requests'));
@@ -26,24 +29,40 @@ function PageLoader() {
   );
 }
 
+function RootRedirect() {
+  const { isAdmin } = useAuth();
+  return <Navigate to={isAdmin ? '/portal' : '/vacations'} replace />;
+}
+
 export default function App() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
+        {/* Rutas públicas */}
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
-        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/calendar" element={<ProtectedRoute><TeamCalendar /></ProtectedRoute>} />
-        <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
-        <Route path="/approvals" element={<ProtectedRoute adminOnly><Approvals /></ProtectedRoute>} />
-        <Route path="/employees" element={<ProtectedRoute adminOnly><Employees /></ProtectedRoute>} />
-        <Route path="/departments" element={<ProtectedRoute adminOnly><Departments /></ProtectedRoute>} />
-        <Route path="/reports" element={<ProtectedRoute adminOnly><Reports /></ProtectedRoute>} />
-        <Route path="/holidays" element={<ProtectedRoute adminOnly><Holidays /></ProtectedRoute>} />
-        <Route path="/audit" element={<ProtectedRoute adminOnly><Audit /></ProtectedRoute>} />
-        <Route path="/settings" element={<ProtectedRoute adminOnly><Settings /></ProtectedRoute>} />
+        {/* Raíz: redirige según rol */}
+        <Route path="/" element={<ProtectedRoute noLayout><RootRedirect /></ProtectedRoute>} />
+
+        {/* Portal de selección (solo admin) */}
+        <Route path="/portal" element={<ProtectedRoute adminOnly noLayout><Portal /></ProtectedRoute>} />
+
+        {/* Módulo: Asistencias (futuro) */}
+        <Route path="/attendance/*" element={<ProtectedRoute adminOnly noLayout><AttendancePlaceholder /></ProtectedRoute>} />
+
+        {/* Módulo: Vacaciones */}
+        <Route path="/vacations" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/vacations/calendar" element={<ProtectedRoute><TeamCalendar /></ProtectedRoute>} />
+        <Route path="/vacations/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
+        <Route path="/vacations/approvals" element={<ProtectedRoute adminOnly><Approvals /></ProtectedRoute>} />
+        <Route path="/vacations/employees" element={<ProtectedRoute adminOnly><Employees /></ProtectedRoute>} />
+        <Route path="/vacations/departments" element={<ProtectedRoute adminOnly><Departments /></ProtectedRoute>} />
+        <Route path="/vacations/reports" element={<ProtectedRoute adminOnly><Reports /></ProtectedRoute>} />
+        <Route path="/vacations/holidays" element={<ProtectedRoute adminOnly><Holidays /></ProtectedRoute>} />
+        <Route path="/vacations/audit" element={<ProtectedRoute adminOnly><Audit /></ProtectedRoute>} />
+        <Route path="/vacations/settings" element={<ProtectedRoute adminOnly><Settings /></ProtectedRoute>} />
       </Routes>
     </Suspense>
   );

@@ -15,6 +15,7 @@ export const createRequestSchema = z
     employeeId: z.string().uuid().optional(), // opcional: empleados usan el suyo
     startDate: z.coerce.date(),
     endDate: z.coerce.date(),
+    chargedToYear: z.number().int().optional().nullable(),
     reason: z.string().max(500).optional().nullable(),
   })
   .refine((d) => d.endDate >= d.startDate, {
@@ -26,6 +27,7 @@ export const updateRequestSchema = z
   .object({
     startDate: z.coerce.date(),
     endDate: z.coerce.date(),
+    chargedToYear: z.number().int().optional().nullable(),
     reason: z.string().max(500).optional().nullable(),
   })
   .refine((d) => d.endDate >= d.startDate, {
@@ -143,11 +145,20 @@ export async function create(req: Request, res: Response) {
   if (!employee) throw ApiError.notFound('Empleado no encontrado');
   if (employee.status === 'INACTIVE') throw ApiError.badRequest('El empleado está inactivo');
 
-  const days = calendarDaysBetween(body.startDate, body.endDate);
+  const calendarDays = calendarDaysBetween(body.startDate, body.endDate);
+  // Solo descontar feriados que caen en el día de inicio (desplazan el comienzo).
+  // Feriados dentro o al final del período no reducen los días corridos (LCT).
+  const startDayHoliday = await prisma.holiday.count({
+    where: {
+      date: body.startDate,
+      deductsVacation: false,
+    },
+  });
+  const days = Math.max(0, calendarDays - startDayHoliday);
   if (days <= 0) throw ApiError.badRequest('El rango no contiene días laborables');
 
   // ── Validación de año ──────────────────────────────────────────────────────
-  const targetYear = body.startDate.getFullYear();
+  const targetYear = body.chargedToYear ?? body.startDate.getFullYear();
   const currentYear = new Date().getFullYear();
 
   if (targetYear < currentYear && !isAdmin) {
@@ -218,6 +229,7 @@ export async function create(req: Request, res: Response) {
       startDate: body.startDate,
       endDate: body.endDate,
       daysRequested: days,
+      chargedToYear: targetYear,
       reason: body.reason ?? null,
       status: RequestStatus.PENDING,
     },
@@ -321,7 +333,14 @@ export async function update(req: Request, res: Response) {
     throw ApiError.badRequest('Sólo puedes editar solicitudes pendientes');
   }
 
-  const days = calendarDaysBetween(body.startDate, body.endDate);
+  const calendarDays = calendarDaysBetween(body.startDate, body.endDate);
+  const startDayHoliday = await prisma.holiday.count({
+    where: {
+      date: body.startDate,
+      deductsVacation: false,
+    },
+  });
+  const days = Math.max(0, calendarDays - startDayHoliday);
   if (days <= 0) throw ApiError.badRequest('El rango no contiene días laborables');
 
   const overlapping = await prisma.vacationRequest.findFirst({
@@ -335,7 +354,8 @@ export async function update(req: Request, res: Response) {
   });
   if (overlapping) throw ApiError.conflict('Ya existe una solicitud que se solapa con esas fechas');
 
-  const balance = await getEmployeeBalance(request.employeeId, body.startDate.getFullYear());
+  const updateTargetYear = body.chargedToYear ?? body.startDate.getFullYear();
+  const balance = await getEmployeeBalance(request.employeeId, updateTargetYear);
   const availableWithCurrent = balance.available + request.daysRequested;
   if (days > availableWithCurrent) {
     throw ApiError.badRequest(
@@ -349,6 +369,7 @@ export async function update(req: Request, res: Response) {
       startDate: body.startDate,
       endDate: body.endDate,
       daysRequested: days,
+      chargedToYear: updateTargetYear,
       reason: body.reason ?? null,
       status: RequestStatus.PENDING,
     },

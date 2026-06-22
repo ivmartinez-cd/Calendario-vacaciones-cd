@@ -21,6 +21,8 @@ export default function Settings() {
   const [nextYearOpenDay, setNextYearOpenDay] = useState(1);
   const [allowAdvanceRequest, setAllowAdvanceRequest] = useState(true);
   const [maxAdvanceDays, setMaxAdvanceDays] = useState(0);
+  const [allowCarryOver, setAllowCarryOver] = useState(true);
+  const [maxCarryOverDays, setMaxCarryOverDays] = useState(0);
   const [openingCycle, setOpeningCycle] = useState(false);
 
   async function load() {
@@ -34,6 +36,8 @@ export default function Settings() {
     setNextYearOpenDay(cfg.nextYearOpenDay ?? 1);
     setAllowAdvanceRequest(cfg.allowAdvanceRequest ?? true);
     setMaxAdvanceDays(cfg.maxAdvanceDays ?? 0);
+    setAllowCarryOver(cfg.allowCarryOver ?? true);
+    setMaxCarryOverDays(cfg.maxCarryOverDays ?? 0);
   }
 
   useEffect(() => {
@@ -52,6 +56,8 @@ export default function Settings() {
         nextYearOpenDay,
         allowAdvanceRequest,
         maxAdvanceDays,
+        allowCarryOver,
+        maxCarryOverDays,
       });
       setConfig(data);
       toast.success('Configuración guardada');
@@ -90,11 +96,12 @@ export default function Settings() {
   ];
 
   async function forceOpenNextYear() {
-    if (!confirm(`¿Abrir el ciclo ${new Date().getFullYear() + 1} para todos los empleados activos?`)) return;
+    const nextYearYear = new Date().getFullYear() + 1;
+    if (!confirm(`¿Abrir el ciclo del año siguiente (${nextYearYear}) para todos los empleados activos?`)) return;
     setOpeningCycle(true);
     try {
       const { data } = await api.post<{ opened: number; skipped: number }>('/cycles/open-next-year');
-      toast.success(`Ciclo ${new Date().getFullYear() + 1} abierto: ${data.opened} empleados nuevos, ${data.skipped} ya abiertos`);
+      toast.success(`Ciclo ${nextYearYear} abierto: ${data.opened} empleados nuevos, ${data.skipped} ya abiertos`);
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -288,7 +295,7 @@ export default function Settings() {
               <div>
                 <h2 className="font-semibold">Apertura del Año Siguiente</h2>
                 <p className="text-sm text-muted-foreground">
-                  Fecha a partir de la cual se habilitan solicitudes del {new Date().getFullYear() + 1}
+                  Fecha a partir de la cual se habilitan solicitudes del año próximo
                 </p>
               </div>
             </div>
@@ -318,7 +325,7 @@ export default function Settings() {
               />
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              El ciclo {new Date().getFullYear() + 1} se abrirá automáticamente el
+              El ciclo del año siguiente ({new Date().getFullYear() + 1}) se abrirá automáticamente el
               {' '}<strong>{String(nextYearOpenDay).padStart(2,'0')}/{String(nextYearOpenMonth).padStart(2,'0')}/{new Date().getFullYear()}</strong>.
             </p>
           </Card>
@@ -362,10 +369,49 @@ export default function Settings() {
             </div>
           </Card>
 
+          <Card className="p-6">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100 text-teal-600 dark:bg-teal-500/15 dark:text-teal-400">
+                <CalendarClock className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="font-semibold">Arrastre de Vacaciones (Carry-Over)</h2>
+                <p className="text-sm text-muted-foreground">Configuración para transferir días no usados al año siguiente</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={allowCarryOver}
+                  onChange={(e) => setAllowCarryOver(e.target.checked)}
+                  className="h-4 w-4 rounded border-border accent-primary"
+                />
+                <span className="text-sm font-medium">Permitir arrastrar días no usados</span>
+              </label>
+              {allowCarryOver && (
+                <div>
+                  <Input
+                    label={`Límite de días a arrastrar (0 = sin límite)`}
+                    type="number"
+                    min={0}
+                    value={maxCarryOverDays}
+                    onChange={(e) => setMaxCarryOverDays(parseInt(e.target.value) || 0)}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {maxCarryOverDays === 0
+                      ? 'Los días sobrantes se arrastrarán completos al ciclo del año siguiente.'
+                      : `Se arrastrará un máximo de ${maxCarryOverDays} días sobrantes al ciclo del año siguiente.`}
+                  </p>
+                </div>
+              )}
+            </div>
+          </Card>
+
           <Card className="p-6 lg:col-span-2">
             <h2 className="mb-2 font-semibold">Acción Manual</h2>
             <p className="mb-4 text-sm text-muted-foreground">
-              Fuerza la apertura inmediata del ciclo {new Date().getFullYear() + 1} sin esperar la fecha de apertura automática.
+              Fuerza la apertura inmediata del ciclo del año siguiente ({new Date().getFullYear() + 1}) sin esperar la fecha de apertura automática.
             </p>
             <Button variant="outline" onClick={forceOpenNextYear} loading={openingCycle}>
               <CalendarClock className="h-4 w-4" />

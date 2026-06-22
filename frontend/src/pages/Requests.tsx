@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Pencil, CalendarRange, Filter, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Pencil, CalendarRange, Filter, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api, getErrorMessage } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-import { Employee, VacationRequest, Balance, RequestStatus } from '@/types';
+import { Employee, VacationRequest, Balance, RequestStatus, Holiday } from '@/types';
 import { Button, Card, Input, Modal, Select, Textarea, Spinner, Badge } from '@/components/ui';
 import { StatusBadge } from '@/components/StatusBadge';
 import { formatDate, statusLabels, statusStyles } from '@/lib/utils';
@@ -20,6 +20,74 @@ function calendarDays(startStr: string, endStr: string): number {
   if (dow === 5) days += 2;
   else if (dow === 6) days += 1;
   return days;
+}
+
+function toDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function parseLocalDate(s: string): Date {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function nextBusinessDay(dateStr: string, holidaySet: Set<string>): string {
+  const d = parseLocalDate(dateStr);
+  do {
+    d.setDate(d.getDate() + 1);
+  } while (d.getDay() === 0 || d.getDay() === 6 || holidaySet.has(toDateStr(d)));
+  return toDateStr(d);
+}
+
+function prevBusinessDay(dateStr: string, holidaySet: Set<string>): string {
+  const d = parseLocalDate(dateStr);
+  do {
+    d.setDate(d.getDate() - 1);
+  } while (d.getDay() === 0 || d.getDay() === 6 || holidaySet.has(toDateStr(d)));
+  return toDateStr(d);
+}
+
+interface HolidayWarning {
+  position: 'start' | 'end';
+  holidayName: string;
+  date: string;
+  suggestedDate: string;
+}
+
+function detectHolidayWarnings(
+  startDate: string,
+  endDate: string,
+  holidays: Holiday[],
+  holidaySet: Set<string>,
+): HolidayWarning[] {
+  const warnings: HolidayWarning[] = [];
+  if (!startDate || !endDate) return warnings;
+
+  if (holidaySet.has(startDate)) {
+    const h = holidays.find((h) => h.date.slice(0, 10) === startDate);
+    if (h && !h.deductsVacation) {
+      warnings.push({
+        position: 'start',
+        holidayName: h.name,
+        date: startDate,
+        suggestedDate: nextBusinessDay(startDate, holidaySet),
+      });
+    }
+  }
+
+  if (holidaySet.has(endDate) && endDate !== startDate) {
+    const h = holidays.find((h) => h.date.slice(0, 10) === endDate);
+    if (h && !h.deductsVacation) {
+      warnings.push({
+        position: 'end',
+        holidayName: h.name,
+        date: endDate,
+        suggestedDate: prevBusinessDay(endDate, holidaySet),
+      });
+    }
+  }
+
+  return warnings;
 }
 
 type SortKey = 'employee' | 'startDate' | 'endDate' | 'days' | 'status' | 'createdAt';
@@ -40,15 +108,34 @@ export default function Requests() {
 
   const [editingReq, setEditingReq] = useState<VacationRequest | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ startDate: '', endDate: '', reason: '' });
+  const [editForm, setEditForm] = useState({ startDate: '', endDate: '', reason: '', chargedToYear: '' });
   const editPreviewDays = useMemo(() => calendarDays(editForm.startDate, editForm.endDate), [editForm.startDate, editForm.endDate]);
 
-  const [form, setForm] = useState({ employeeId: '', startDate: '', endDate: '', reason: '' });
+  const [form, setForm] = useState({ employeeId: '', startDate: '', endDate: '', reason: '', chargedToYear: '' });
   const previewDays = useMemo(() => calendarDays(form.startDate, form.endDate), [form.startDate, form.endDate]);
 
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const holidaySet = useMemo(() => new Set(holidays.map((h) => h.date.slice(0, 10))), [holidays]);
+
+  const createWarnings = useMemo(
+    () => detectHolidayWarnings(form.startDate, form.endDate, holidays, holidaySet),
+    [form.startDate, form.endDate, holidays, holidaySet],
+  );
+  const editWarnings = useMemo(
+    () => detectHolidayWarnings(editForm.startDate, editForm.endDate, holidays, holidaySet),
+    [editForm.startDate, editForm.endDate, holidays, holidaySet],
+  );
+
+  const currentYear = new Date().getFullYear();
+  const chargedYearOptions = [currentYear - 1, currentYear, currentYear + 1];
+
   async function load() {
-    const reqRes = await api.get<VacationRequest[]>('/vacations');
+    const [reqRes, holRes] = await Promise.all([
+      api.get<VacationRequest[]>('/vacations'),
+      api.get<Holiday[]>('/holidays'),
+    ]);
     setRequests(reqRes.data);
+    setHolidays(holRes.data);
 
     if (isAdmin) {
       const empRes = await api.get<Employee[]>('/employees');
@@ -118,11 +205,12 @@ export default function Requests() {
         employeeId: isAdmin ? form.employeeId || undefined : undefined,
         startDate: form.startDate,
         endDate: form.endDate,
+        chargedToYear: form.chargedToYear ? Number(form.chargedToYear) : undefined,
         reason: form.reason || undefined,
       });
       toast.success('Solicitud creada');
       setModalOpen(false);
-      setForm({ employeeId: '', startDate: '', endDate: '', reason: '' });
+      setForm({ employeeId: '', startDate: '', endDate: '', reason: '', chargedToYear: '' });
       load();
     } catch (err) {
       toast.error(getErrorMessage(err));
@@ -148,6 +236,7 @@ export default function Requests() {
       startDate: r.startDate.slice(0, 10),
       endDate: r.endDate.slice(0, 10),
       reason: r.reason || '',
+      chargedToYear: r.chargedToYear ? String(r.chargedToYear) : '',
     });
     setEditModalOpen(true);
   }
@@ -160,6 +249,7 @@ export default function Requests() {
       await api.put(`/vacations/${editingReq.id}`, {
         startDate: editForm.startDate,
         endDate: editForm.endDate,
+        chargedToYear: editForm.chargedToYear ? Number(editForm.chargedToYear) : undefined,
         reason: editForm.reason || undefined,
       });
       toast.success('Solicitud actualizada');
@@ -247,6 +337,7 @@ export default function Requests() {
                   <SortTh k="startDate">Inicio</SortTh>
                   <SortTh k="endDate">Fin</SortTh>
                   <SortTh k="days">Días</SortTh>
+                  {isAdmin && <th className="px-4 py-3 font-medium">Ciclo</th>}
                   <th className="px-4 py-3 font-medium">Motivo</th>
                   <SortTh k="status">Estado</SortTh>
                   <th className="px-4 py-3" />
@@ -263,6 +354,16 @@ export default function Requests() {
                     <td className="px-4 py-3">{formatDate(r.startDate)}</td>
                     <td className="px-4 py-3">{formatDate(r.endDate)}</td>
                     <td className="px-4 py-3">{r.daysRequested}</td>
+                    {isAdmin && (
+                      <td className="px-4 py-3">
+                        {r.chargedToYear ?? new Date(r.startDate).getFullYear()}
+                        {r.chargedToYear && r.chargedToYear !== new Date(r.startDate).getFullYear() && (
+                          <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                            ≠ fecha
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="max-w-[200px] truncate px-4 py-3 text-muted-foreground">{r.reason || '—'}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -344,6 +445,18 @@ export default function Requests() {
               required
             />
           </div>
+          {isAdmin && (
+            <Select
+              label="Ciclo de cargo"
+              value={form.chargedToYear}
+              onChange={(e) => setForm({ ...form, chargedToYear: e.target.value })}
+            >
+              <option value="">Automático (año de inicio)</option>
+              {chargedYearOptions.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </Select>
+          )}
           <Textarea
             label="Motivo (opcional)"
             rows={3}
@@ -354,8 +467,36 @@ export default function Requests() {
           {previewDays > 0 && (
             <div className="rounded-lg bg-primary/10 p-3 text-sm">
               Se solicitarán <strong>{previewDays}</strong> día(s) corrido(s).
+              {form.chargedToYear && (
+                <span className="ml-1">Se cargarán al ciclo <strong>{form.chargedToYear}</strong>.</span>
+              )}
             </div>
           )}
+          {createWarnings.map((w) => (
+            <div key={w.position} className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+              <div className="flex-1">
+                <p className="text-amber-800 dark:text-amber-300">
+                  La fecha de {w.position === 'start' ? 'inicio' : 'fin'}{' '}
+                  <strong>{formatDate(w.date)}</strong> es feriado:{' '}
+                  <strong>{w.holidayName}</strong>.
+                </p>
+                <button
+                  type="button"
+                  className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700 transition"
+                  onClick={() => {
+                    if (w.position === 'start') {
+                      setForm({ ...form, startDate: w.suggestedDate });
+                    } else {
+                      setForm({ ...form, endDate: w.suggestedDate });
+                    }
+                  }}
+                >
+                  Mover al {formatDate(w.suggestedDate)}
+                </button>
+              </div>
+            </div>
+          ))}
         </form>
       </Modal>
 
@@ -393,6 +534,18 @@ export default function Requests() {
               required
             />
           </div>
+          {isAdmin && (
+            <Select
+              label="Ciclo de cargo"
+              value={editForm.chargedToYear}
+              onChange={(e) => setEditForm({ ...editForm, chargedToYear: e.target.value })}
+            >
+              <option value="">Automático (año de inicio)</option>
+              {chargedYearOptions.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </Select>
+          )}
           <Textarea
             label="Motivo (opcional)"
             rows={3}
@@ -403,8 +556,36 @@ export default function Requests() {
           {editPreviewDays > 0 && (
             <div className="rounded-lg bg-primary/10 p-3 text-sm">
               Se solicitarán <strong>{editPreviewDays}</strong> día(s) corrido(s).
+              {editForm.chargedToYear && (
+                <span className="ml-1">Se cargarán al ciclo <strong>{editForm.chargedToYear}</strong>.</span>
+              )}
             </div>
           )}
+          {editWarnings.map((w) => (
+            <div key={w.position} className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+              <div className="flex-1">
+                <p className="text-amber-800 dark:text-amber-300">
+                  La fecha de {w.position === 'start' ? 'inicio' : 'fin'}{' '}
+                  <strong>{formatDate(w.date)}</strong> es feriado:{' '}
+                  <strong>{w.holidayName}</strong>.
+                </p>
+                <button
+                  type="button"
+                  className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700 transition"
+                  onClick={() => {
+                    if (w.position === 'start') {
+                      setEditForm({ ...editForm, startDate: w.suggestedDate });
+                    } else {
+                      setEditForm({ ...editForm, endDate: w.suggestedDate });
+                    }
+                  }}
+                >
+                  Mover al {formatDate(w.suggestedDate)}
+                </button>
+              </div>
+            </div>
+          ))}
           {editingReq && editingReq.status !== 'PENDING' && (
             <div className="rounded-lg bg-amber-100 dark:bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
               Al guardar, el estado volverá a <strong>Pendiente</strong> para nueva revisión.

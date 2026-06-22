@@ -44,8 +44,8 @@ export function Button({ variant = 'primary', size = 'md', loading, className, c
 }
 
 /* ---------- Card ---------- */
-export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn('rounded-xl border border-border bg-card shadow-card', className)}>{children}</div>;
+export function Card({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn('rounded-xl border border-border bg-card shadow-card', className)} {...props}>{children}</div>;
 }
 
 /* ---------- Input ---------- */

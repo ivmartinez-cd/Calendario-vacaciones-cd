@@ -103,6 +103,39 @@ export async function getBalanceForYear(
 ): Promise<VacationBalance> {
   const cycle = await ensureCycle(employeeId, year);
 
+  // Recalcular carryOver dinámicamente si está habilitado en SystemConfig
+  const config = await prisma.systemConfig.findUnique({ where: { id: 'singleton' } });
+  let carryOver = cycle.carryOver;
+
+  if (config?.allowCarryOver) {
+    const prevYear = year - 1;
+    const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+    let calculatedCarryOver = 0;
+    if (employee && employee.hireDate && prevYear >= 2026) {
+      const prevBalance = await getBalanceForYear(employeeId, prevYear);
+      const remaining = prevBalance.available;
+      calculatedCarryOver = remaining > 0
+        ? (config.maxCarryOverDays > 0 ? Math.min(config.maxCarryOverDays, remaining) : remaining)
+        : 0;
+    }
+
+    if (calculatedCarryOver !== cycle.carryOver) {
+      await prisma.vacationCycle.update({
+        where: { id: cycle.id },
+        data: { carryOver: calculatedCarryOver },
+      });
+      carryOver = calculatedCarryOver;
+    }
+  } else {
+    if (cycle.carryOver !== 0) {
+      await prisma.vacationCycle.update({
+        where: { id: cycle.id },
+        data: { carryOver: 0 },
+      });
+      carryOver = 0;
+    }
+  }
+
   const yearStart = new Date(Date.UTC(year, 0, 1));
   const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
 
@@ -110,7 +143,10 @@ export async function getBalanceForYear(
     where: {
       employeeId,
       status: { in: [RequestStatus.APPROVED, RequestStatus.PENDING] },
-      startDate: { gte: yearStart, lte: yearEnd },
+      OR: [
+        { chargedToYear: year },
+        { chargedToYear: null, startDate: { gte: yearStart, lte: yearEnd } },
+      ],
     },
   });
 
@@ -121,10 +157,10 @@ export async function getBalanceForYear(
     else pending += r.daysRequested;
   }
 
-  const totalAvailable = cycle.annualDays + cycle.carryOver;
+  const totalAvailable = cycle.annualDays + carryOver;
   return {
     annual: cycle.annualDays,
-    carryOver: cycle.carryOver,
+    carryOver,
     used,
     pending,
     available: totalAvailable - used - pending,

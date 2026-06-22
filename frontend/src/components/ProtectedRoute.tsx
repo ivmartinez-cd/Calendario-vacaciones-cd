@@ -3,7 +3,13 @@ import { useAuth } from '@/context/AuthContext';
 import { Spinner } from './ui';
 import Layout from './Layout';
 
-export function ProtectedRoute({ children, adminOnly }: { children: React.ReactNode; adminOnly?: boolean }) {
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  adminOnly?: boolean;
+  noLayout?: boolean;
+}
+
+export function ProtectedRoute({ children, adminOnly, noLayout }: ProtectedRouteProps) {
   const { user, loading, isAdmin } = useAuth();
 
   if (loading)
@@ -14,7 +20,8 @@ export function ProtectedRoute({ children, adminOnly }: { children: React.ReactN
     );
 
   if (!user) return <Navigate to="/login" replace />;
-  if (adminOnly && !isAdmin) return <Navigate to="/" replace />;
+  if (adminOnly && !isAdmin) return <Navigate to="/vacations" replace />;
+  if (noLayout) return <>{children}</>;
 
   return <Layout>{children}</Layout>;
 }

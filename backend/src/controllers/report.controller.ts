@@ -46,12 +46,14 @@ async function buildDepartmentReport(): Promise<DeptReportRow[]> {
   for (const d of departments) {
     let annual = 0;
     let used = 0;
+    let available = 0;
     for (const e of d.employees) {
       const b = await getEmployeeBalance(e.id);
       annual += b.annual;
       used += b.used;
+      available += b.available;
     }
-    rows.push({ department: d.name, employees: d.employees.length, annual, used, available: annual - used });
+    rows.push({ department: d.name, employees: d.employees.length, annual, used, available });
   }
   return rows;
 }

@@ -52,7 +52,7 @@ export default function Dashboard() {
         {summary?.nextYearDays && (
           <Stat
             icon={CalendarCheck2}
-            label={`Disponibles ${new Date().getFullYear() + 1}`}
+            label={`Disponibles año siguiente (${new Date().getFullYear() + 1})`}
             value={summary.nextYearDays.available}
             hint={`de ${summary.nextYearDays.annual} totales (anticipadas)`}
             color="text-fuchsia-600 bg-fuchsia-100 dark:bg-fuchsia-500/15"

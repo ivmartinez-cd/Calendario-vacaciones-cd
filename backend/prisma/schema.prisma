@@ -90,6 +90,7 @@ model VacationRequest {
   startDate     DateTime
   endDate       DateTime
   daysRequested Int
+  chargedToYear Int?          // Ciclo anual al que se cargan los días (null → startDate year)
   reason        String?
   status        RequestStatus @default(PENDING)
   createdAt     DateTime      @default(now())
@@ -102,6 +103,7 @@ model VacationRequest {
 
   @@index([employeeId])
   @@index([status])
+  @@index([chargedToYear])
 }
 
 /// Historial de decisiones (aprobación/rechazo) sobre una solicitud.
@@ -153,11 +155,12 @@ model SystemConfig {
   minAdvanceNoticeDays  Int      @default(7)
   maxOverlapPercent     Int      @default(50)
   maxOverlapCount       Int      @default(0)
-  // Configuración de ciclos anuales
   nextYearOpenMonth     Int      @default(10)   // mes en que abre el ciclo del año siguiente (1-12)
   nextYearOpenDay       Int      @default(1)    // día del mes
   allowAdvanceRequest   Boolean  @default(true) // permite solicitudes del año siguiente
   maxAdvanceDays        Int      @default(0)    // 0 = sin límite; N = máximo días adelantados
+  allowCarryOver        Boolean  @default(true) // permite arrastrar días no usados al año siguiente
+  maxCarryOverDays      Int      @default(0)    // 0 = sin límite; N = máximo días a arrastrar
   updatedAt             DateTime @updatedAt
 }
 

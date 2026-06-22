@@ -372,7 +372,7 @@ function EmployeeRow({
 
   const bal = employee.balance;
   const usedAndScheduled = (bal?.used ?? 0) + (bal?.pending ?? 0);
-  const total = bal?.annual ?? 0;
+  const total = (bal?.annual ?? 0) + (bal?.carryOver ?? 0);
   const progressPct = total > 0 ? Math.min((usedAndScheduled / total) * 100, 100) : 0;
 
   return (
@@ -410,13 +410,13 @@ function EmployeeRow({
           <div>
             <span className="text-[10px] font-semibold text-muted-foreground mr-1 uppercase">{new Date().getFullYear()}:</span>
             <span className="font-medium">{bal?.available ?? '—'}</span>
-            <span className="text-muted-foreground">/{bal?.annual ?? '—'}</span>
+            <span className="text-muted-foreground">/{(bal?.annual ?? 0) + (bal?.carryOver ?? 0)}</span>
           </div>
           {employee.nextYearBalance && (
             <div className="mt-1 text-xs text-violet-600 dark:text-violet-400">
               <span className="text-[10px] font-semibold mr-1 uppercase">{new Date().getFullYear() + 1}:</span>
               <span className="font-medium">{employee.nextYearBalance.available}</span>
-              <span className="opacity-80">/{employee.nextYearBalance.annual}</span>
+              <span className="opacity-80">/{(employee.nextYearBalance.annual ?? 0) + (employee.nextYearBalance.carryOver ?? 0)}</span>
             </div>
           )}
         </td>
@@ -475,6 +475,9 @@ function EmployeeRow({
                       </div>
                       <div className="flex justify-between text-[10px] text-muted-foreground">
                         <span>Usado: {bal?.used ?? 0}</span>
+                        {bal && bal.carryOver > 0 && (
+                          <span>Arrastrados: {bal.carryOver}</span>
+                        )}
                         <span>Programado: {bal?.pending ?? 0}</span>
                       </div>
                     </div>
@@ -483,12 +486,12 @@ function EmployeeRow({
                     {employee.nextYearBalance && (
                       <div className="mt-4 border-t border-border pt-4 space-y-1.5">
                         <div className="flex justify-between text-xs font-semibold text-violet-700 dark:text-violet-300">
-                          <span>Ciclo {new Date().getFullYear() + 1} (Anticipado)</span>
-                          <span>{employee.nextYearBalance.available} / {employee.nextYearBalance.annual} libres</span>
+                          <span>Ciclo del año siguiente ({new Date().getFullYear() + 1}) (Anticipado)</span>
+                          <span>{employee.nextYearBalance.available} / {employee.nextYearBalance.annual + employee.nextYearBalance.carryOver} libres</span>
                         </div>
                         {(() => {
                           const nextBal = employee.nextYearBalance;
-                          const nextTotal = nextBal.annual;
+                          const nextTotal = nextBal.annual + nextBal.carryOver;
                           const nextUsedAndScheduled = nextBal.used + nextBal.pending;
                           const nextProgressPct = nextTotal > 0 ? Math.min((nextUsedAndScheduled / nextTotal) * 100, 100) : 0;
                           return (
@@ -501,6 +504,9 @@ function EmployeeRow({
                               </div>
                               <div className="flex justify-between text-[10px] text-muted-foreground">
                                 <span>Usado: {nextBal.used}</span>
+                                {nextBal.carryOver > 0 && (
+                                  <span>Arrastrados: {nextBal.carryOver}</span>
+                                )}
                                 <span>Programado: {nextBal.pending}</span>
                               </div>
                             </>

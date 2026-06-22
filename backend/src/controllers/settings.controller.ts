@@ -19,6 +19,8 @@ export const updateSettingsSchema = z.object({
   nextYearOpenDay: z.number().int().min(1).max(31).optional(),
   allowAdvanceRequest: z.boolean().optional(),
   maxAdvanceDays: z.number().int().min(0).optional(),
+  allowCarryOver: z.boolean().optional(),
+  maxCarryOverDays: z.number().int().min(0).optional(),
 });
 
 async function ensureConfig() {
@@ -48,6 +50,8 @@ export async function update(req: Request, res: Response) {
       ...(data.nextYearOpenDay !== undefined ? { nextYearOpenDay: data.nextYearOpenDay } : {}),
       ...(data.allowAdvanceRequest !== undefined ? { allowAdvanceRequest: data.allowAdvanceRequest } : {}),
       ...(data.maxAdvanceDays !== undefined ? { maxAdvanceDays: data.maxAdvanceDays } : {}),
+      ...(data.allowCarryOver !== undefined ? { allowCarryOver: data.allowCarryOver } : {}),
+      ...(data.maxCarryOverDays !== undefined ? { maxCarryOverDays: data.maxCarryOverDays } : {}),
     },
   });
   await recordAudit({ action: 'UPDATE', entity: 'SystemConfig', entityId: 'singleton', userId: req.user!.sub, metadata: { changes: Object.keys(data) } });

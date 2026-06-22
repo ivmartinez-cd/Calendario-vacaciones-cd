@@ -9,6 +9,8 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', asyncHandler(holiday.list));
+router.get('/export', authorize(Role.ADMIN), asyncHandler(holiday.exportAll));
+router.post('/import/:year', authorize(Role.ADMIN), asyncHandler(holiday.importFromApi));
 router.post('/', authorize(Role.ADMIN), validate(holiday.holidaySchema), asyncHandler(holiday.create));
 router.put('/:id', authorize(Role.ADMIN), validate(holiday.holidaySchema), asyncHandler(holiday.update));
 router.delete('/:id', authorize(Role.ADMIN), asyncHandler(holiday.remove));

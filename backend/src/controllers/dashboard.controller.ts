@@ -29,17 +29,22 @@ export async function summary(req: Request, res: Response) {
     let totalAnnual = 0;
     let totalUsed = 0;
     let totalPending = 0;
+    let totalCarryOver = 0;
+    let totalAvailable = 0;
     for (const e of employees) {
       const b = await getEmployeeBalance(e.id, currentYear);
       totalAnnual += b.annual;
       totalUsed += b.used;
       totalPending += b.pending;
+      totalCarryOver += b.carryOver;
+      totalAvailable += b.available;
     }
     days = {
       annual: totalAnnual,
       used: totalUsed,
       pending: totalPending,
-      available: totalAnnual - totalUsed - totalPending,
+      carryOver: totalCarryOver,
+      available: totalAvailable,
       cycleOpen: true,
     };
   } else if (req.user?.employeeId) {
