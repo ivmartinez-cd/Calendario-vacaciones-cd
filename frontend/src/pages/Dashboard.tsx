@@ -38,11 +38,26 @@ export default function Dashboard() {
       </div>
 
       {/* Métricas */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${summary?.nextYearDays ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
         <Stat icon={Users} label="Total empleados" value={summary?.totalEmployees ?? 0} hint={`${summary?.activeEmployees ?? 0} activos`} color="text-blue-600 bg-blue-100 dark:bg-blue-500/15" />
         <Stat icon={Plane} label="De vacaciones hoy" value={summary?.onVacationCount ?? 0} color="text-emerald-600 bg-emerald-100 dark:bg-emerald-500/15" />
         <Stat icon={Clock} label="Solicitudes pendientes" value={summary?.pendingRequests ?? 0} color="text-amber-600 bg-amber-100 dark:bg-amber-500/15" />
-        <Stat icon={CalendarCheck2} label="Días disponibles" value={summary?.days.available ?? 0} hint={`de ${summary?.days.annual ?? 0} totales`} color="text-violet-600 bg-violet-100 dark:bg-violet-500/15" />
+        <Stat
+          icon={CalendarCheck2}
+          label={summary?.nextYearDays ? `Disponibles ${new Date().getFullYear()}` : 'Días disponibles'}
+          value={summary?.days.available ?? 0}
+          hint={summary?.days.carryOver && summary.days.carryOver > 0 ? `de ${summary.days.annual} (+${summary.days.carryOver} arrastrados)` : `de ${summary?.days.annual ?? 0} totales`}
+          color="text-violet-600 bg-violet-100 dark:bg-violet-500/15"
+        />
+        {summary?.nextYearDays && (
+          <Stat
+            icon={CalendarCheck2}
+            label={`Disponibles ${new Date().getFullYear() + 1}`}
+            value={summary.nextYearDays.available}
+            hint={`de ${summary.nextYearDays.annual} totales (anticipadas)`}
+            color="text-fuchsia-600 bg-fuchsia-100 dark:bg-fuchsia-500/15"
+          />
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">

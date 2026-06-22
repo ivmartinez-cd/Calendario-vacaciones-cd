@@ -68,8 +68,18 @@ export async function list(req: Request, res: Response) {
   });
 
   // Adjuntar saldo de cada empleado
+  const currentYear = new Date().getFullYear();
+  const nextYear = currentYear + 1;
   const withBalance = await Promise.all(
-    employees.map(async (e) => ({ ...e, balance: await getEmployeeBalance(e.id) })),
+    employees.map(async (e) => {
+      const balance = await getEmployeeBalance(e.id, currentYear);
+      const nextYearBalance = await getEmployeeBalance(e.id, nextYear);
+      return {
+        ...e,
+        balance,
+        nextYearBalance: nextYearBalance.cycleOpen ? nextYearBalance : null,
+      };
+    }),
   );
   res.json(withBalance);
 }
@@ -80,8 +90,15 @@ export async function getById(req: Request, res: Response) {
     include: { department: true, vacationRequests: { orderBy: { startDate: 'desc' } } },
   });
   if (!employee) throw ApiError.notFound('Empleado no encontrado');
-  const balance = await getEmployeeBalance(employee.id);
-  res.json({ ...employee, balance });
+  const currentYear = new Date().getFullYear();
+  const nextYear = currentYear + 1;
+  const balance = await getEmployeeBalance(employee.id, currentYear);
+  const nextYearBalance = await getEmployeeBalance(employee.id, nextYear);
+  res.json({
+    ...employee,
+    balance,
+    nextYearBalance: nextYearBalance.cycleOpen ? nextYearBalance : null,
+  });
 }
 
 export async function getVacations(req: Request, res: Response) {

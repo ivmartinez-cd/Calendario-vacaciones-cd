@@ -39,6 +39,7 @@ export interface Employee {
   departmentId: string;
   department: Department;
   balance?: Balance;
+  nextYearBalance?: Balance | null;
 }
 
 export interface Approval {
@@ -87,6 +88,7 @@ export interface DashboardSummary {
   onVacationCount: number;
   onVacation: { id: string; employee: string; department: string; color: string; endDate: string }[];
   days: Balance;
+  nextYearDays?: Balance | null;
 }
 
 export interface ReportData {

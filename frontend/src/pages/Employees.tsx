@@ -407,8 +407,18 @@ function EmployeeRow({
           <span className="font-medium">{getSeniority(employee.hireDate).label}</span>
         </td>
         <td className="px-4 py-3">
-          <span className="font-medium">{bal?.available ?? '—'}</span>
-          <span className="text-muted-foreground"> / {bal?.annual ?? '—'}</span>
+          <div>
+            <span className="text-[10px] font-semibold text-muted-foreground mr-1 uppercase">{new Date().getFullYear()}:</span>
+            <span className="font-medium">{bal?.available ?? '—'}</span>
+            <span className="text-muted-foreground">/{bal?.annual ?? '—'}</span>
+          </div>
+          {employee.nextYearBalance && (
+            <div className="mt-1 text-xs text-violet-600 dark:text-violet-400">
+              <span className="text-[10px] font-semibold mr-1 uppercase">{new Date().getFullYear() + 1}:</span>
+              <span className="font-medium">{employee.nextYearBalance.available}</span>
+              <span className="opacity-80">/{employee.nextYearBalance.annual}</span>
+            </div>
+          )}
         </td>
         <td className="px-4 py-3">
           <Badge className={employee.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-500/15 dark:text-gray-300'}>
@@ -443,28 +453,61 @@ function EmployeeRow({
                     <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold">
                       <Calendar className="h-4 w-4 text-primary" /> Progreso Anual
                     </h4>
-                    <div className="mb-2 h-3 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: `${progressPct}%`,
-                          background: progressPct > 90
-                            ? 'hsl(0 72% 51%)'
-                            : progressPct > 70
-                            ? 'hsl(38 92% 50%)'
-                            : 'hsl(var(--primary))',
-                        }}
-                      />
+                    
+                    {/* Año actual */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs font-semibold">
+                        <span>Ciclo {new Date().getFullYear()}</span>
+                        <span className="text-muted-foreground">{bal?.available ?? 0} / {total} libres</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${progressPct}%`,
+                            background: progressPct > 90
+                              ? 'hsl(0 72% 51%)'
+                              : progressPct > 70
+                              ? 'hsl(38 92% 50%)'
+                              : 'hsl(var(--primary))',
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[10px] text-muted-foreground">
+                        <span>Usado: {bal?.used ?? 0}</span>
+                        <span>Programado: {bal?.pending ?? 0}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>
-                        Usado: <strong className="text-foreground">{bal?.used ?? 0}</strong> |
-                        Programado: <strong className="text-foreground">{bal?.pending ?? 0}</strong>
-                      </span>
-                      <span>
-                        Restante: <strong className="text-foreground">{bal?.available ?? 0}</strong> / {total}
-                      </span>
-                    </div>
+
+                    {/* Año siguiente (si está abierto) */}
+                    {employee.nextYearBalance && (
+                      <div className="mt-4 border-t border-border pt-4 space-y-1.5">
+                        <div className="flex justify-between text-xs font-semibold text-violet-700 dark:text-violet-300">
+                          <span>Ciclo {new Date().getFullYear() + 1} (Anticipado)</span>
+                          <span>{employee.nextYearBalance.available} / {employee.nextYearBalance.annual} libres</span>
+                        </div>
+                        {(() => {
+                          const nextBal = employee.nextYearBalance;
+                          const nextTotal = nextBal.annual;
+                          const nextUsedAndScheduled = nextBal.used + nextBal.pending;
+                          const nextProgressPct = nextTotal > 0 ? Math.min((nextUsedAndScheduled / nextTotal) * 100, 100) : 0;
+                          return (
+                            <>
+                              <div className="h-2 overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className="h-full rounded-full bg-violet-600 dark:bg-violet-500 transition-all duration-500"
+                                  style={{ width: `${nextProgressPct}%` }}
+                                />
+                              </div>
+                              <div className="flex justify-between text-[10px] text-muted-foreground">
+                                <span>Usado: {nextBal.used}</span>
+                                <span>Programado: {nextBal.pending}</span>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
 
                   {/* Historial */}

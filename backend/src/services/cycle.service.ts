@@ -99,7 +99,7 @@ function calculateVacationDaysAtDate(
  */
 export async function getBalanceForYear(
   employeeId: string,
-  year: number,
+  year: number = new Date().getFullYear(),
 ): Promise<VacationBalance> {
   const cycle = await ensureCycle(employeeId, year);
 
