@@ -45,17 +45,23 @@ const requestInclude = {
   approvals: { include: { approver: { select: { email: true } } }, orderBy: { createdAt: 'desc' as const } },
 };
 
-/** Lista solicitudes. Los empleados sólo ven las suyas; los admin ven todas (con filtros). */
+/** Lista solicitudes. Los empleados sólo ven las suyas; managers ven su sector; admins ven todo. */
 export async function list(req: Request, res: Response) {
   const { status, employeeId, departmentId, from, to } = req.query as Record<string, string | undefined>;
-  const isAdmin = req.user!.role === Role.ADMIN;
+  const { role, managedDepartmentId } = req.user!;
+  const isAdmin = role === Role.ADMIN;
+  const isManager = role === Role.MANAGER;
 
   const where: Record<string, unknown> = {};
-  if (!isAdmin) {
-    where.employeeId = req.user!.employeeId;
-  } else {
+  if (isAdmin) {
     if (employeeId) where.employeeId = employeeId;
     if (departmentId) where.employee = { departmentId };
+  } else if (isManager) {
+    // Solo solicitudes del sector a cargo
+    where.employee = { departmentId: managedDepartmentId };
+    if (employeeId) where.employeeId = employeeId;
+  } else {
+    where.employeeId = req.user!.employeeId;
   }
   if (status) where.status = status as RequestStatus;
   if (from || to) {
@@ -75,13 +81,24 @@ export async function list(req: Request, res: Response) {
 /** Eventos para el calendario de equipo (sólo aprobadas + pendientes). */
 export async function calendar(req: Request, res: Response) {
   const { from, to } = req.query as Record<string, string | undefined>;
+  const { role, managedDepartmentId } = req.user!;
+  const isManager = role === Role.MANAGER;
+
+  const where: Record<string, unknown> = {
+    status: { in: [RequestStatus.APPROVED, RequestStatus.PENDING] },
+  };
+  if (isManager && managedDepartmentId) {
+    where.employee = { departmentId: managedDepartmentId };
+  }
+  if (from || to) {
+    where.startDate = {
+      ...(from ? { gte: new Date(from) } : {}),
+      ...(to ? { lte: new Date(to) } : {}),
+    };
+  }
+
   const requests = await prisma.vacationRequest.findMany({
-    where: {
-      status: { in: [RequestStatus.APPROVED, RequestStatus.PENDING] },
-      ...(from || to
-        ? { startDate: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } }
-        : {}),
-    },
+    where,
     include: { employee: { include: { department: true } } },
   });
 
@@ -127,9 +144,12 @@ export async function getById(req: Request, res: Response) {
     include: requestInclude,
   });
   if (!request) throw ApiError.notFound('Solicitud no encontrada');
-  if (req.user!.role !== Role.ADMIN && request.employeeId !== req.user!.employeeId) {
-    throw ApiError.forbidden();
-  }
+  const { role, managedDepartmentId, employeeId } = req.user!;
+  const isAdmin = role === Role.ADMIN;
+  const isManager = role === Role.MANAGER;
+  const isOwner = request.employeeId === employeeId;
+  const isManagedDept = isManager && request.employee.departmentId === managedDepartmentId;
+  if (!isAdmin && !isOwner && !isManagedDept) throw ApiError.forbidden();
   res.json(request);
 }
 
@@ -201,6 +221,71 @@ export async function create(req: Request, res: Response) {
   });
   if (overlapping) throw ApiError.conflict('Ya existe una solicitud que se solapa con esas fechas');
 
+  // Validación A: exclusiones mutuas
+  const exclusions = await prisma.vacationExclusion.findMany({
+    where: { OR: [{ employeeAId: employeeId }, { employeeBId: employeeId }] },
+    include: {
+      employeeA: { select: { id: true, firstName: true, lastName: true } },
+      employeeB: { select: { id: true, firstName: true, lastName: true } },
+    },
+  });
+  if (exclusions.length > 0) {
+    const counterpartMap = new Map<string, string>();
+    for (const e of exclusions) {
+      if (e.employeeAId === employeeId) {
+        counterpartMap.set(e.employeeBId, `${e.employeeB.firstName} ${e.employeeB.lastName}`);
+      } else {
+        counterpartMap.set(e.employeeAId, `${e.employeeA.firstName} ${e.employeeA.lastName}`);
+      }
+    }
+    const conflict = await prisma.vacationRequest.findFirst({
+      where: {
+        employeeId: { in: [...counterpartMap.keys()] },
+        status: { in: [RequestStatus.APPROVED, RequestStatus.PENDING] },
+        startDate: { lte: body.endDate },
+        endDate: { gte: body.startDate },
+      },
+    });
+    if (conflict) {
+      const name = counterpartMap.get(conflict.employeeId) ?? 'otro empleado';
+      throw ApiError.conflict(
+        `No se pueden solicitar vacaciones en estas fechas debido a una regla de exclusión mutua con ${name}.`,
+      );
+    }
+  }
+
+  // Validación B: límite de simultaneidad por cargo
+  const posLimit = await prisma.positionOverlapLimit.findUnique({
+    where: { position: employee.position },
+  });
+  if (posLimit) {
+    const othersOnVacation = await prisma.vacationRequest.findMany({
+      where: {
+        employeeId: { not: employeeId },
+        status: { in: [RequestStatus.APPROVED, RequestStatus.PENDING] },
+        employee: { position: employee.position, status: 'ACTIVE' },
+        startDate: { lte: body.endDate },
+        endDate: { gte: body.startDate },
+      },
+      select: { startDate: true, endDate: true },
+    });
+    if (othersOnVacation.length >= posLimit.maxEmployees) {
+      const startMs = body.startDate.getTime();
+      const endMs = body.endDate.getTime();
+      for (let ms = startMs; ms <= endMs; ms += 86400000) {
+        const day = new Date(ms).toISOString().slice(0, 10);
+        const count = othersOnVacation.filter(
+          (r) => r.startDate.toISOString().slice(0, 10) <= day && r.endDate.toISOString().slice(0, 10) >= day,
+        ).length;
+        if (count >= posLimit.maxEmployees) {
+          throw ApiError.conflict(
+            `Se supera el límite máximo de empleados de la posición '${employee.position}' tomándose vacaciones al mismo tiempo (Límite: ${posLimit.maxEmployees}).`,
+          );
+        }
+      }
+    }
+  }
+
   // Validar saldo disponible para el año objetivo.
   const balance = await getEmployeeBalance(employeeId, targetYear);
   if (!balance.cycleOpen && !isAdmin) {
@@ -240,7 +325,7 @@ export async function create(req: Request, res: Response) {
   res.status(201).json(request);
 }
 
-/** Aprobar o rechazar una solicitud (sólo admin). */
+/** Aprobar o rechazar una solicitud (admin o manager de sector). */
 export async function decide(req: Request, res: Response) {
   const { decision, comment } = req.body as z.infer<typeof decisionSchema>;
   const request = await prisma.vacationRequest.findUnique({
@@ -248,6 +333,16 @@ export async function decide(req: Request, res: Response) {
     include: { employee: { include: { user: true } } },
   });
   if (!request) throw ApiError.notFound('Solicitud no encontrada');
+
+  // MANAGER: verificar que la solicitud pertenece a su sector y no es la suya propia
+  if (req.user!.role === Role.MANAGER) {
+    if (request.employee.departmentId !== req.user!.managedDepartmentId) {
+      throw ApiError.forbidden('Solo puedes aprobar solicitudes de tu sector');
+    }
+    if (request.employeeId === req.user!.employeeId) {
+      throw ApiError.forbidden('No puedes aprobar tu propia solicitud');
+    }
+  }
 
   const newStatus =
     decision === ApprovalDecision.APPROVED ? RequestStatus.APPROVED : RequestStatus.REJECTED;
@@ -299,6 +394,11 @@ export async function overlaps(req: Request, res: Response) {
   });
   if (!request) throw ApiError.notFound('Solicitud no encontrada');
 
+  // MANAGER: solo puede ver solapamientos de su sector
+  if (req.user!.role === Role.MANAGER && request.employee.departmentId !== req.user!.managedDepartmentId) {
+    throw ApiError.forbidden('Solo puedes ver solapamientos de tu sector');
+  }
+
   const teamRequests = await prisma.vacationRequest.findMany({
     where: {
       id: { not: request.id },
@@ -332,6 +432,9 @@ export async function update(req: Request, res: Response) {
   if (!isAdmin && request.status !== RequestStatus.PENDING) {
     throw ApiError.badRequest('Sólo puedes editar solicitudes pendientes');
   }
+  if (request.employee.status === 'INACTIVE') {
+    throw ApiError.badRequest('No se pueden modificar solicitudes de empleados inactivos');
+  }
 
   const calendarDays = calendarDaysBetween(body.startDate, body.endDate);
   const startDayHoliday = await prisma.holiday.count({
@@ -353,6 +456,73 @@ export async function update(req: Request, res: Response) {
     },
   });
   if (overlapping) throw ApiError.conflict('Ya existe una solicitud que se solapa con esas fechas');
+
+  // Validación A: exclusiones mutuas
+  const updateExclusions = await prisma.vacationExclusion.findMany({
+    where: { OR: [{ employeeAId: request.employeeId }, { employeeBId: request.employeeId }] },
+    include: {
+      employeeA: { select: { id: true, firstName: true, lastName: true } },
+      employeeB: { select: { id: true, firstName: true, lastName: true } },
+    },
+  });
+  if (updateExclusions.length > 0) {
+    const counterpartMap = new Map<string, string>();
+    for (const e of updateExclusions) {
+      if (e.employeeAId === request.employeeId) {
+        counterpartMap.set(e.employeeBId, `${e.employeeB.firstName} ${e.employeeB.lastName}`);
+      } else {
+        counterpartMap.set(e.employeeAId, `${e.employeeA.firstName} ${e.employeeA.lastName}`);
+      }
+    }
+    const conflict = await prisma.vacationRequest.findFirst({
+      where: {
+        id: { not: request.id },
+        employeeId: { in: [...counterpartMap.keys()] },
+        status: { in: [RequestStatus.APPROVED, RequestStatus.PENDING] },
+        startDate: { lte: body.endDate },
+        endDate: { gte: body.startDate },
+      },
+    });
+    if (conflict) {
+      const name = counterpartMap.get(conflict.employeeId) ?? 'otro empleado';
+      throw ApiError.conflict(
+        `No se pueden solicitar vacaciones en estas fechas debido a una regla de exclusión mutua con ${name}.`,
+      );
+    }
+  }
+
+  // Validación B: límite de simultaneidad por cargo
+  const updatePosLimit = await prisma.positionOverlapLimit.findUnique({
+    where: { position: request.employee.position },
+  });
+  if (updatePosLimit) {
+    const othersOnVacation = await prisma.vacationRequest.findMany({
+      where: {
+        id: { not: request.id },
+        employeeId: { not: request.employeeId },
+        status: { in: [RequestStatus.APPROVED, RequestStatus.PENDING] },
+        employee: { position: request.employee.position, status: 'ACTIVE' },
+        startDate: { lte: body.endDate },
+        endDate: { gte: body.startDate },
+      },
+      select: { startDate: true, endDate: true },
+    });
+    if (othersOnVacation.length >= updatePosLimit.maxEmployees) {
+      const startMs = body.startDate.getTime();
+      const endMs = body.endDate.getTime();
+      for (let ms = startMs; ms <= endMs; ms += 86400000) {
+        const day = new Date(ms).toISOString().slice(0, 10);
+        const count = othersOnVacation.filter(
+          (r) => r.startDate.toISOString().slice(0, 10) <= day && r.endDate.toISOString().slice(0, 10) >= day,
+        ).length;
+        if (count >= updatePosLimit.maxEmployees) {
+          throw ApiError.conflict(
+            `Se supera el límite máximo de empleados de la posición '${request.employee.position}' tomándose vacaciones al mismo tiempo (Límite: ${updatePosLimit.maxEmployees}).`,
+          );
+        }
+      }
+    }
+  }
 
   const updateTargetYear = body.chargedToYear ?? body.startDate.getFullYear();
   const balance = await getEmployeeBalance(request.employeeId, updateTargetYear);

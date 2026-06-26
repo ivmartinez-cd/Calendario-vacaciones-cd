@@ -29,13 +29,14 @@ interface NavItem {
   label: string;
   icon: typeof LayoutDashboard;
   adminOnly?: boolean;
+  managerOrAdmin?: boolean;
 }
 
 const navItems: NavItem[] = [
   { to: '/vacations', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/vacations/calendar', label: 'Calendario de equipo', icon: CalendarDays },
   { to: '/vacations/requests', label: 'Mis solicitudes', icon: CalendarCheck },
-  { to: '/vacations/approvals', label: 'Aprobaciones', icon: ClipboardCheck, adminOnly: true },
+  { to: '/vacations/approvals', label: 'Aprobaciones', icon: ClipboardCheck, managerOrAdmin: true },
   { to: '/vacations/employees', label: 'Empleados', icon: Users, adminOnly: true },
   { to: '/vacations/departments', label: 'Sectores', icon: Building2, adminOnly: true },
   { to: '/vacations/holidays', label: 'Feriados', icon: PartyPopper, adminOnly: true },
@@ -45,27 +46,37 @@ const navItems: NavItem[] = [
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { user, isAdmin, logout } = useAuth();
+  const { user, isAdmin, isManager, logout } = useAuth();
   const { theme, toggle } = useTheme();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const items = navItems.filter((i) => !i.adminOnly || isAdmin);
+  const items = navItems.filter((i) => {
+    if (i.adminOnly) return isAdmin;
+    if (i.managerOrAdmin) return isAdmin || isManager;
+    return true;
+  });
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Sidebar */}
+      {/* ── Sidebar corporativo ──────────────────────────────────────────── */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 w-64 transform border-r border-border bg-card transition-transform lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-40 w-64 transform transition-transform lg:translate-x-0 flex flex-col',
+          'bg-[#1a1a1a]',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="flex h-16 flex-col items-center justify-center border-b border-border px-6">
-          <img src="/logo.png" alt="Canal Directo" className="h-7" />
-          <span className="text-[10px] font-medium tracking-wider text-muted-foreground">VACACIONES</span>
+        {/* Encabezado del sidebar */}
+        <div className="flex h-[72px] flex-col items-center justify-center border-b border-white/10 px-6 gap-0.5">
+          <img src="/logo-white.svg" alt="Canal Directo" className="h-8 w-auto" />
+          <span className="text-[9px] font-semibold tracking-[0.2em] text-white/40 uppercase mt-1">
+            Gestión de Vacaciones
+          </span>
         </div>
-        <nav className="space-y-1 p-3">
+
+        {/* Navegación */}
+        <nav className="flex-1 space-y-0.5 p-3 overflow-y-auto">
           {items.map((item) => (
             <NavLink
               key={item.to}
@@ -74,34 +85,51 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition',
-                  isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
+                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                  isActive
+                    ? 'bg-[#F7941D] text-white shadow-md shadow-[#F7941D]/30'
+                    : 'text-white/60 hover:bg-white/8 hover:text-white',
                 )
               }
             >
-              <item.icon className="h-5 w-5" />
+              <item.icon className="h-4.5 w-4.5 shrink-0" />
               {item.label}
             </NavLink>
           ))}
         </nav>
+
+        {/* Footer del sidebar con info del usuario */}
+        <div className="border-t border-white/10 p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F7941D] text-xs font-bold text-white">
+              {user?.name?.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold text-white">{user?.name}</p>
+              <p className="text-[10px] text-white/40">
+                {isAdmin ? 'Administrador' : isManager ? 'Jefe de sector' : (user?.position ?? 'Empleado')}
+              </p>
+            </div>
+          </div>
+        </div>
       </aside>
 
       {sidebarOpen && (
-        <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Contenido */}
+      {/* ── Contenido principal ──────────────────────────────────────────── */}
       <div className="flex flex-1 flex-col lg:pl-64">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-card/80 px-4 backdrop-blur lg:px-8">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-card/90 px-4 backdrop-blur lg:px-8">
           <button className="rounded-md p-2 hover:bg-muted lg:hidden" onClick={() => setSidebarOpen(true)}>
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex-1" />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {isAdmin && (
               <button
                 onClick={() => navigate('/portal')}
-                className="mr-1 flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition"
+                className="mr-1 flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition"
                 title="Cambiar de módulo"
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
@@ -110,18 +138,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             )}
             <NotificationBell />
             <button onClick={toggle} className="rounded-lg p-2 hover:bg-muted" title="Cambiar tema">
-              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              {theme === 'dark' ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
             </button>
-            <div className="ml-2 flex items-center gap-3 border-l border-border pl-3">
+            <div className="ml-1.5 flex items-center gap-2 border-l border-border pl-3">
               <div className="hidden text-right sm:block">
-                <p className="text-sm font-medium leading-tight">{user?.name}</p>
-                <p className="text-xs text-muted-foreground">{isAdmin ? 'Administrador' : 'Empleado'}</p>
+                <p className="text-sm font-semibold leading-tight">{user?.name}</p>
+                <p className="text-xs text-muted-foreground">{isAdmin ? 'Administrador' : isManager ? 'Jefe de sector' : (user?.position ?? 'Empleado')}</p>
               </div>
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary">
-                {user?.name?.charAt(0).toUpperCase()}
-              </div>
-              <button onClick={logout} className="rounded-lg p-2 hover:bg-muted" title="Cerrar sesión">
-                <LogOut className="h-5 w-5" />
+              <button onClick={logout} className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground" title="Cerrar sesión">
+                <LogOut className="h-4.5 w-4.5" />
               </button>
             </div>
           </div>
@@ -171,9 +196,9 @@ function NotificationBell() {
   return (
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen((o) => !o)} className="relative rounded-lg p-2 hover:bg-muted">
-        <Bell className="h-5 w-5" />
+        <Bell className="h-4.5 w-4.5" />
         {unread > 0 && (
-          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#F7941D] px-1 text-[10px] font-bold text-white">
             {unread}
           </span>
         )}
@@ -181,7 +206,7 @@ function NotificationBell() {
       {open && (
         <div className="absolute right-0 mt-2 w-80 rounded-xl border border-border bg-card shadow-xl">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <span className="font-semibold">Notificaciones</span>
+            <span className="font-semibold text-sm">Notificaciones</span>
             {unread > 0 && (
               <button onClick={markAll} className="text-xs text-primary hover:underline">
                 Marcar todas como leídas

@@ -5,7 +5,16 @@ import { api, getErrorMessage } from '@/lib/api';
 import { Department } from '@/types';
 import { Button, Card, Input, Modal, Spinner } from '@/components/ui';
 
-const PRESET_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444', '#14b8a6', '#6366f1'];
+const PRESET_COLORS = [
+  '#1e3a8a','#1d4ed8','#3b82f6','#60a5fa','#0ea5e9','#0284c7',
+  '#4338ca','#6366f1','#7c3aed','#8b5cf6','#9333ea','#a855f7',
+  '#166534','#15803d','#22c55e','#10b981','#059669','#84cc16',
+  '#0d9488','#14b8a6','#0891b2','#06b6d4','#65a30d','#4d7c0f',
+  '#991b1b','#dc2626','#ef4444','#f43f5e','#e11d48','#be123c',
+  '#db2777','#ec4899','#d946ef','#c026d3',
+  '#92400e','#d97706','#f59e0b','#eab308','#ea580c','#f97316',
+  '#475569','#64748b',
+];
 
 export default function Departments() {
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -125,22 +134,32 @@ export default function Departments() {
           <Input label="Nombre" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           <div>
             <label className="text-sm font-medium">Color</label>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {PRESET_COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => setForm({ ...form, color: c })}
-                  className={`h-8 w-8 rounded-lg transition ${form.color === c ? 'ring-2 ring-offset-2 ring-primary ring-offset-card' : ''}`}
+                  className={`h-7 w-7 rounded-lg transition ${form.color === c ? 'ring-2 ring-offset-2 ring-primary ring-offset-card' : 'opacity-90 hover:opacity-100'}`}
                   style={{ background: c }}
+                  title={c}
                 />
               ))}
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="h-6 w-6 rounded-md border border-border flex-shrink-0" style={{ background: form.color }} />
               <input
-                type="color"
+                type="text"
                 value={form.color}
-                onChange={(e) => setForm({ ...form, color: e.target.value })}
-                className="h-8 w-8 cursor-pointer rounded-lg border border-border bg-transparent"
+                onChange={(e) => {
+                  const val = e.target.value.startsWith('#') ? e.target.value : '#' + e.target.value;
+                  setForm({ ...form, color: val });
+                }}
+                placeholder="#000000"
+                maxLength={7}
+                className="w-28 rounded-lg border border-border bg-background px-2 py-1 text-sm font-mono outline-none focus:ring-2 focus:ring-primary/40"
               />
+              <span className="text-xs text-muted-foreground">o ingresá un hex personalizado</span>
             </div>
           </div>
         </form>

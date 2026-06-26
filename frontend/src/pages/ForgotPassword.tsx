@@ -24,8 +24,11 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-background p-4">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md p-8">
+        <div className="mb-6 flex justify-center">
+          <img src="/logo.svg" alt="Canal Directo" className="h-9 w-auto" />
+        </div>
         <h1 className="mb-2 text-2xl font-bold">Recuperar contraseña</h1>
         <p className="mb-6 text-sm text-muted-foreground">
           Introduce tu email y te enviaremos un enlace para restablecer tu contraseña.

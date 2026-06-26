@@ -1,4 +1,4 @@
-export type Role = 'ADMIN' | 'EMPLOYEE';
+export type Role = 'ADMIN' | 'EMPLOYEE' | 'MANAGER';
 export type EmployeeStatus = 'ACTIVE' | 'INACTIVE';
 export type RequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
@@ -7,7 +7,20 @@ export interface AuthUser {
   email: string;
   role: Role;
   employeeId: string | null;
+  managedDepartmentId: string | null;
   name: string;
+  position: string | null;
+}
+
+export interface UserWithRole {
+  id: string;
+  email: string;
+  role: Role;
+  employeeId: string | null;
+  employeeName: string | null;
+  employeePosition: string | null;
+  managedDepartmentId: string | null;
+  managedDepartmentName: string | null;
 }
 
 export interface Department {
@@ -40,6 +53,7 @@ export interface Employee {
   department: Department;
   balance?: Balance;
   nextYearBalance?: Balance | null;
+  hasUser?: boolean;
 }
 
 export interface Approval {
@@ -158,6 +172,23 @@ export interface VacationCycle {
 export interface OverlapData {
   overlaps: VacationRequest[];
   teamSize: number;
+}
+
+export interface VacationExclusion {
+  id: string;
+  employeeAId: string;
+  employeeBId: string;
+  createdAt: string;
+  employeeA: { id: string; firstName: string; lastName: string; position: string };
+  employeeB: { id: string; firstName: string; lastName: string; position: string };
+}
+
+export interface PositionOverlapLimit {
+  id: string;
+  position: string;
+  maxEmployees: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AuditLog {

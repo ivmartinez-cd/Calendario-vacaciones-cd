@@ -72,7 +72,7 @@ export async function ensureCycle(employeeId: string, year: number) {
  * Calcula los días de vacaciones que corresponden al empleado
  * tomando como referencia una fecha específica (para proyecciones futuras).
  */
-function calculateVacationDaysAtDate(
+export function calculateVacationDaysAtDate(
   hireDate: Date,
   referenceDate: Date,
   tiers?: SeniorityTier[],
@@ -231,6 +231,29 @@ export async function autoOpenCyclesIfNeeded(): Promise<void> {
     const result = await openNextYearCycles();
     if (result.opened > 0) {
       console.log(`✅ Ciclo ${currentYear + 1} abierto para ${result.opened} empleados.`);
+    }
+  }
+}
+
+/**
+ * Recalcula annualDays en todos los VacationCycles existentes de un empleado
+ * cuando cambia su hireDate. Evita que ciclos ya creados queden desactualizados.
+ */
+export async function recalculateCyclesOnHireDateChange(
+  employeeId: string,
+  newHireDate: Date,
+): Promise<void> {
+  const tiers = await getSeniorityTiers();
+  const cycles = await prisma.vacationCycle.findMany({ where: { employeeId } });
+
+  for (const cycle of cycles) {
+    const referenceDate = new Date(Date.UTC(cycle.year, 0, 1));
+    const annualDays = calculateVacationDaysAtDate(newHireDate, referenceDate, tiers);
+    if (annualDays !== cycle.annualDays) {
+      await prisma.vacationCycle.update({
+        where: { id: cycle.id },
+        data: { annualDays },
+      });
     }
   }
 }

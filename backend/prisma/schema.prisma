@@ -15,6 +15,7 @@ datasource db {
 enum Role {
   ADMIN
   EMPLOYEE
+  MANAGER
 }
 
 enum EmployeeStatus {
@@ -47,6 +48,10 @@ model User {
   employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
   employeeId String?   @unique
 
+  /// Solo relevante si role = MANAGER. Determina qué sector puede aprobar.
+  managedDepartment   Department? @relation("DepartmentManagers", fields: [managedDepartmentId], references: [id], onDelete: SetNull)
+  managedDepartmentId String?
+
   approvals     ApprovalHistory[]
   auditLogs     AuditLog[]
   notifications Notification[]
@@ -60,6 +65,7 @@ model Department {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   employees Employee[]
+  managers  User[]     @relation("DepartmentManagers")
 }
 
 /// Empleado de la empresa.
@@ -82,6 +88,8 @@ model Employee {
   user             User?
   vacationRequests VacationRequest[]
   vacationCycles   VacationCycle[]
+  exclusionsA      VacationExclusion[] @relation("ExclusionsA")
+  exclusionsB      VacationExclusion[] @relation("ExclusionsB")
 }
 
 /// Solicitud de vacaciones de un empleado.
@@ -182,6 +190,28 @@ model VacationCycle {
   @@unique([employeeId, year])
   @@index([year])
   @@index([employeeId])
+}
+
+/// Pareja de empleados que no pueden superponer sus vacaciones.
+model VacationExclusion {
+  id          String   @id @default(uuid())
+  employeeAId String
+  employeeBId String
+  createdAt   DateTime @default(now())
+
+  employeeA Employee @relation("ExclusionsA", fields: [employeeAId], references: [id], onDelete: Cascade)
+  employeeB Employee @relation("ExclusionsB", fields: [employeeBId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeAId, employeeBId])
+}
+
+/// Límite máximo de vacaciones simultáneas para un cargo/posición específico.
+model PositionOverlapLimit {
+  id           String   @id @default(uuid())
+  position     String   @unique
+  maxEmployees Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 /// Registro de auditoría de cambios.

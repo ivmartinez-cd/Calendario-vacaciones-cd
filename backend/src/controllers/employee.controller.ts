@@ -6,6 +6,7 @@ import { ApiError } from '../utils/ApiError';
 import { hashPassword } from '../utils/password';
 import { recordAudit } from '../services/audit.service';
 import { getEmployeeBalance } from '../services/vacation.service';
+import { recalculateCyclesOnHireDateChange } from '../services/cycle.service';
 import { calculateVacationDays, SeniorityTier } from '../utils/dates';
 
 async function getSeniorityTiers(): Promise<SeniorityTier[] | undefined> {
@@ -27,6 +28,13 @@ function randomEmployeeColor(): string {
   return EMPLOYEE_PALETTE[Math.floor(Math.random() * EMPLOYEE_PALETTE.length)];
 }
 
+const passwordSchema = z
+  .string()
+  .min(8, 'Mínimo 8 caracteres')
+  .regex(/[A-Z]/, 'Debe contener al menos una mayúscula')
+  .regex(/[0-9]/, 'Debe contener al menos un número')
+  .regex(/[^A-Za-z0-9]/, 'Debe contener al menos un carácter especial');
+
 export const createEmployeeSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
@@ -41,15 +49,27 @@ export const createEmployeeSchema = z.object({
   password: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(8).optional()),
 });
 
-export const updateEmployeeSchema = createEmployeeSchema.partial().omit({ createAccount: true, password: true });
+export const updateEmployeeSchema = createEmployeeSchema
+  .partial()
+  .omit({ createAccount: true, password: true })
+  .extend({
+    createAccount: z.boolean().optional(),
+    changePassword: z.boolean().optional(),
+    password: z.preprocess((v) => (v === '' ? undefined : v), passwordSchema.optional()),
+  });
 
 export async function list(req: Request, res: Response) {
   const { search, departmentId, status } = req.query as Record<string, string | undefined>;
+  const { role, managedDepartmentId } = req.user!;
+  const isManager = role === Role.MANAGER;
+
+  // MANAGER: forzar filtro por su sector; ignorar el query param departmentId
+  const effectiveDepartmentId = isManager ? managedDepartmentId : departmentId;
 
   const employees = await prisma.employee.findMany({
     where: {
       AND: [
-        departmentId ? { departmentId } : {},
+        effectiveDepartmentId ? { departmentId: effectiveDepartmentId } : {},
         status ? { status: status as EmployeeStatus } : {},
         search
           ? {
@@ -63,7 +83,7 @@ export async function list(req: Request, res: Response) {
           : {},
       ],
     },
-    include: { department: true },
+    include: { department: true, user: { select: { id: true } } },
     orderBy: [{ firstName: 'asc' }],
   });
 
@@ -72,12 +92,14 @@ export async function list(req: Request, res: Response) {
   const nextYear = currentYear + 1;
   const withBalance = await Promise.all(
     employees.map(async (e) => {
+      const { user, ...empData } = e;
       const balance = await getEmployeeBalance(e.id, currentYear);
       const nextYearBalance = await getEmployeeBalance(e.id, nextYear);
       return {
-        ...e,
+        ...empData,
         balance,
         nextYearBalance: nextYearBalance.cycleOpen ? nextYearBalance : null,
+        hasUser: !!user,
       };
     }),
   );
@@ -90,6 +112,12 @@ export async function getById(req: Request, res: Response) {
     include: { department: true, vacationRequests: { orderBy: { startDate: 'desc' } } },
   });
   if (!employee) throw ApiError.notFound('Empleado no encontrado');
+
+  // MANAGER: solo puede consultar empleados de su sector
+  if (req.user!.role === Role.MANAGER && employee.departmentId !== req.user!.managedDepartmentId) {
+    throw ApiError.forbidden('Solo puedes consultar empleados de tu sector');
+  }
+
   const currentYear = new Date().getFullYear();
   const nextYear = currentYear + 1;
   const balance = await getEmployeeBalance(employee.id, currentYear);
@@ -137,19 +165,71 @@ export async function create(req: Request, res: Response) {
 }
 
 export async function update(req: Request, res: Response) {
-  const data = req.body as z.infer<typeof updateEmployeeSchema>;
+  const { createAccount, changePassword, password, ...data } = req.body as z.infer<typeof updateEmployeeSchema>;
+
   if (data.hireDate) {
     const tiers = await getSeniorityTiers();
     data.annualVacationDays = calculateVacationDays(data.hireDate, tiers);
   }
+
+  const existing = await prisma.employee.findUnique({
+    where: { id: req.params.id },
+    include: { user: { select: { id: true } } },
+  });
+  if (!existing) throw ApiError.notFound('Empleado no encontrado');
+
   const employee = await prisma.employee.update({ where: { id: req.params.id }, data });
-  await recordAudit({ action: 'UPDATE', entity: 'Employee', entityId: employee.id, userId: req.user!.sub, metadata: { employee: `${employee.firstName} ${employee.lastName}`, changes: Object.keys(data) } });
-  res.json(employee);
+
+  if (data.hireDate) {
+    await recalculateCyclesOnHireDateChange(employee.id, data.hireDate);
+  }
+
+  // Si cambió el email y el empleado tiene cuenta de usuario, sincronizar User.email
+  if (data.email && existing.user && data.email !== existing.email) {
+    await prisma.user.update({
+      where: { id: existing.user.id },
+      data: { email: data.email },
+    });
+  }
+
+  if (createAccount && !existing.user) {
+    if (!password) throw ApiError.badRequest('Se requiere una contraseña para crear la cuenta');
+    await prisma.user.create({
+      data: {
+        email: employee.email,
+        password: await hashPassword(password),
+        role: Role.EMPLOYEE,
+        employeeId: employee.id,
+      },
+    });
+  }
+
+  if (changePassword && existing.user) {
+    if (!password) throw ApiError.badRequest('Se requiere una contraseña para cambiarla');
+    await prisma.user.update({
+      where: { id: existing.user.id },
+      data: { password: await hashPassword(password) },
+    });
+  }
+
+  const auditMeta: Record<string, unknown> = {
+    employee: `${employee.firstName} ${employee.lastName}`,
+    changes: Object.keys(data),
+  };
+  if (createAccount && !existing.user) auditMeta.credentialsCreated = true;
+  if (changePassword && existing.user) auditMeta.passwordChanged = true;
+
+  await recordAudit({ action: 'UPDATE', entity: 'Employee', entityId: employee.id, userId: req.user!.sub, metadata: auditMeta });
+  res.json({ ...employee, hasUser: (createAccount && !existing.user) ? true : !!existing.user });
 }
 
 export async function remove(req: Request, res: Response) {
   const employee = await prisma.employee.findUnique({ where: { id: req.params.id }, include: { user: true } });
   if (!employee) throw ApiError.notFound('Empleado no encontrado');
+
+  if (employee.user?.role === Role.MANAGER && employee.user.managedDepartmentId) {
+    throw ApiError.conflict('Este empleado es jefe de sector. Reasigná el rol antes de eliminar.');
+  }
 
   await prisma.$transaction(async (tx) => {
     if (employee.user) {

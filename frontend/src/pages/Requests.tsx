@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Pencil, CalendarRange, Filter, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Pencil, CalendarRange, Filter, ChevronUp, ChevronDown, AlertTriangle, Search, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api, getErrorMessage } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -94,7 +94,7 @@ type SortKey = 'employee' | 'startDate' | 'endDate' | 'days' | 'status' | 'creat
 type SortDir = 'asc' | 'desc';
 
 export default function Requests() {
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, isManager, user } = useAuth();
   const [requests, setRequests] = useState<VacationRequest[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [balance, setBalance] = useState<Balance | null>(null);
@@ -102,6 +102,7 @@ export default function Requests() {
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<RequestStatus | ''>('');
   const [sortKey, setSortKey] = useState<SortKey>('createdAt');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -154,6 +155,16 @@ export default function Requests() {
   const filtered = useMemo(() => {
     let list = [...requests];
     if (statusFilter) list = list.filter((r) => r.status === statusFilter);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((r) => {
+        const name = `${r.employee.firstName} ${r.employee.lastName}`.toLowerCase();
+        const reason = (r.reason ?? '').toLowerCase();
+        const start = r.startDate.slice(0, 10);
+        const end = r.endDate.slice(0, 10);
+        return name.includes(q) || reason.includes(q) || start.includes(q) || end.includes(q);
+      });
+    }
     list.sort((a, b) => {
       let cmp = 0;
       switch (sortKey) {
@@ -171,7 +182,7 @@ export default function Requests() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return list;
-  }, [requests, statusFilter, sortKey, sortDir]);
+  }, [requests, searchQuery, statusFilter, sortKey, sortDir]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -274,7 +285,7 @@ export default function Requests() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">{isAdmin ? 'Solicitudes de vacaciones' : 'Mis solicitudes'}</h1>
+          <h1 className="text-2xl font-bold">{isAdmin ? 'Solicitudes de vacaciones' : isManager ? 'Solicitudes del sector' : 'Mis solicitudes'}</h1>
           <p className="text-muted-foreground">Crea y gestiona las solicitudes de vacaciones</p>
         </div>
         <Button onClick={() => setModalOpen(true)}>
@@ -293,32 +304,52 @@ export default function Requests() {
         </div>
       )}
 
-      {/* Filtros y Ordenamiento */}
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Búsqueda y filtros */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
+        {/* Campo de búsqueda */}
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={isAdmin || isManager ? 'Buscar por empleado, motivo o fecha…' : 'Buscar por motivo o fecha…'}
+            className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-8 text-sm outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Filtro por estado */}
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium text-muted-foreground">Filtrar:</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setStatusFilter('')}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-              statusFilter === '' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
-          >
-            Todas
-          </button>
-          {(['PENDING', 'APPROVED', 'REJECTED'] as RequestStatus[]).map((s) => (
+          <div className="flex flex-wrap gap-1.5">
             <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
+              onClick={() => setStatusFilter('')}
               className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                statusFilter === s ? statusStyles[s] : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                statusFilter === '' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
               }`}
             >
-              {statusLabels[s]}
+              Todas
             </button>
-          ))}
+            {(['PENDING', 'APPROVED', 'REJECTED'] as RequestStatus[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                  statusFilter === s ? statusStyles[s] : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                }`}
+              >
+                {statusLabels[s]}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -326,18 +357,22 @@ export default function Requests() {
         {filtered.length === 0 ? (
           <p className="py-16 text-center text-muted-foreground">
             <CalendarRange className="mx-auto mb-2 h-10 w-10 opacity-40" />
-            {statusFilter ? 'No hay solicitudes con ese estado' : 'No hay solicitudes todavía'}
+            {searchQuery
+              ? `Sin resultados para "${searchQuery}"`
+              : statusFilter
+              ? 'No hay solicitudes con ese estado'
+              : 'No hay solicitudes todavía'}
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-border text-left text-muted-foreground">
                 <tr>
-                  {isAdmin && <SortTh k="employee">Empleado</SortTh>}
+                  {(isAdmin || isManager) && <SortTh k="employee">Empleado</SortTh>}
                   <SortTh k="startDate">Inicio</SortTh>
                   <SortTh k="endDate">Fin</SortTh>
                   <SortTh k="days">Días</SortTh>
-                  {isAdmin && <th className="px-4 py-3 font-medium">Ciclo</th>}
+                  {(isAdmin || isManager) && <th className="px-4 py-3 font-medium">Ciclo</th>}
                   <th className="px-4 py-3 font-medium">Motivo</th>
                   <SortTh k="status">Estado</SortTh>
                   <th className="px-4 py-3" />
@@ -346,7 +381,7 @@ export default function Requests() {
               <tbody>
                 {filtered.map((r) => (
                   <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/50">
-                    {isAdmin && (
+                    {(isAdmin || isManager) && (
                       <td className="px-4 py-3 font-medium">
                         {r.employee.firstName} {r.employee.lastName}
                       </td>
@@ -354,7 +389,7 @@ export default function Requests() {
                     <td className="px-4 py-3">{formatDate(r.startDate)}</td>
                     <td className="px-4 py-3">{formatDate(r.endDate)}</td>
                     <td className="px-4 py-3">{r.daysRequested}</td>
-                    {isAdmin && (
+                    {(isAdmin || isManager) && (
                       <td className="px-4 py-3">
                         {r.chargedToYear ?? new Date(r.startDate).getFullYear()}
                         {r.chargedToYear && r.chargedToYear !== new Date(r.startDate).getFullYear() && (

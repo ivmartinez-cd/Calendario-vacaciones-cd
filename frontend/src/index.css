@@ -1,71 +1,72 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* ── Fuente corporativa Canal Directo: RNS Sanz ─────────────────────────── */
+@font-face { font-family: 'RNS Sanz'; src: url('/fonts/RNSSanz-Light.otf'); font-weight: 300; font-style: normal; font-display: swap; }
+@font-face { font-family: 'RNS Sanz'; src: url('/fonts/RNSSanz-Normal.otf'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'RNS Sanz'; src: url('/fonts/RNSSanz-Medium.otf'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'RNS Sanz'; src: url('/fonts/RNSSanz-SemiBold.otf'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'RNS Sanz'; src: url('/fonts/RNSSanz-Bold.otf'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'RNS Sanz'; src: url('/fonts/RNSSanz-ExtraBold.otf'); font-weight: 800; font-style: normal; font-display: swap; }
+@font-face { font-family: 'RNS Sanz'; src: url('/fonts/RNSSanz-Black.otf'); font-weight: 900; font-style: normal; font-display: swap; }
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --border: 214 32% 91%;
-    --primary: 221 83% 53%;
+    /* Canal Directo brand orange: #F7941D → HSL 33 93% 54% */
+    --primary:            33 93% 54%;
     --primary-foreground: 0 0% 100%;
+
+    --background:         0 0% 98%;
+    --foreground:         220 13% 18%;
+
+    --card:               0 0% 100%;
+    --muted:              30 20% 95%;
+    --muted-foreground:   220 9% 46%;
+    --border:             220 13% 91%;
   }
 
   .dark {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 14%;
-    --muted: 217 33% 20%;
-    --muted-foreground: 215 20% 65%;
-    --border: 217 33% 24%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 11%;
+    --primary:            33 93% 58%;
+    --primary-foreground: 0 0% 100%;
+
+    --background:         220 20% 10%;
+    --foreground:         30 15% 95%;
+
+    --card:               220 20% 13%;
+    --muted:              220 15% 18%;
+    --muted-foreground:   220 10% 60%;
+    --border:             220 15% 22%;
   }
 
-  * {
-    border-color: hsl(var(--border));
-  }
+  * { border-color: hsl(var(--border)); }
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'RNS Sanz', 'Inter', system-ui, sans-serif;
   }
 }
 
-/* --- Ajustes de FullCalendar para integrarse con el tema --- */
+/* ── FullCalendar integrado con tema ─────────────────────────────────────── */
 .fc {
   --fc-border-color: hsl(var(--border));
   --fc-page-bg-color: transparent;
   --fc-neutral-bg-color: hsl(var(--muted));
   --fc-today-bg-color: hsl(var(--primary) / 0.08);
 }
-.fc .fc-toolbar-title {
-  @apply text-lg font-semibold;
-}
-.fc .fc-button {
-  @apply bg-primary border-primary text-primary-foreground capitalize text-sm font-medium shadow-none;
-}
-.fc .fc-button:hover {
-  @apply opacity-90;
-}
-.fc .fc-button-primary:not(:disabled).fc-button-active {
-  @apply bg-primary opacity-100;
-}
+.fc .fc-toolbar-title { @apply text-lg font-semibold; }
+.fc .fc-button { @apply bg-primary border-primary text-primary-foreground capitalize text-sm font-medium shadow-none; }
+.fc .fc-button:hover { @apply opacity-90; }
+.fc .fc-button-primary:not(:disabled).fc-button-active { @apply bg-primary opacity-100; }
 .fc .fc-col-header-cell-cushion,
-.fc .fc-daygrid-day-number {
-  @apply text-muted-foreground no-underline;
-}
+.fc .fc-daygrid-day-number { @apply text-muted-foreground no-underline; }
 .fc-event {
   @apply cursor-pointer text-xs font-medium;
   border: 2px solid var(--fc-event-border-color, transparent);
   border-radius: 4px;
 }
 
-/* Micro-animations */
+/* ── Micro-animaciones ───────────────────────────────────────────────────── */
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes zoom-in-95 { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes slide-in-from-bottom { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -81,6 +82,6 @@
 .slide-in-from-bottom-4 { animation-name: slide-in-from-bottom; }
 .slide-in-from-top-2 { animation-name: slide-in-from-top; }
 
-/* Scrollbar sutil */
+/* ── Scrollbar sutil ────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }

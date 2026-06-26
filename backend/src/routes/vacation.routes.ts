@@ -13,8 +13,8 @@ router.get('/calendar', asyncHandler(vac.calendar));
 router.get('/:id', asyncHandler(vac.getById));
 router.post('/', validate(vac.createRequestSchema), asyncHandler(vac.create));
 router.put('/:id', validate(vac.updateRequestSchema), asyncHandler(vac.update));
-router.get('/:id/overlaps', authorize(Role.ADMIN), asyncHandler(vac.overlaps));
-router.post('/:id/decision', authorize(Role.ADMIN), validate(vac.decisionSchema), asyncHandler(vac.decide));
+router.get('/:id/overlaps', authorize(Role.ADMIN, Role.MANAGER), asyncHandler(vac.overlaps));
+router.post('/:id/decision', authorize(Role.ADMIN, Role.MANAGER), validate(vac.decisionSchema), asyncHandler(vac.decide));
 router.delete('/:id', asyncHandler(vac.remove));
 
 export default router;

@@ -28,19 +28,34 @@ export const resetSchema = z.object({
   password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
 });
 
+const passwordStrengthSchema = z
+  .string()
+  .min(8, 'Mínimo 8 caracteres')
+  .regex(/[A-Z]/, 'Debe contener al menos una mayúscula')
+  .regex(/[0-9]/, 'Debe contener al menos un número')
+  .regex(/[^A-Za-z0-9]/, 'Debe contener al menos un carácter especial');
+
+export const directResetSchema = z.object({
+  email: z.string().email('Email inválido'),
+  password: passwordStrengthSchema,
+});
+
 function publicUser(user: {
   id: string;
   email: string;
   role: string;
   employeeId: string | null;
-  employee?: { firstName: string; lastName: string } | null;
+  managedDepartmentId: string | null;
+  employee?: { firstName: string; lastName: string; position: string } | null;
 }) {
   return {
     id: user.id,
     email: user.email,
     role: user.role,
     employeeId: user.employeeId,
+    managedDepartmentId: user.managedDepartmentId,
     name: user.employee ? `${user.employee.firstName} ${user.employee.lastName}` : 'Administrador',
+    position: user.employee?.position ?? null,
   };
 }
 
@@ -51,7 +66,7 @@ export async function login(req: Request, res: Response) {
     throw ApiError.unauthorized('Credenciales inválidas');
   }
 
-  const payload = { sub: user.id, role: user.role, employeeId: user.employeeId };
+  const payload = { sub: user.id, role: user.role, employeeId: user.employeeId, managedDepartmentId: user.managedDepartmentId };
   await recordAudit({ action: 'LOGIN', entity: 'User', entityId: user.id, userId: user.id, metadata: { email: user.email } });
 
   res.json({
@@ -72,7 +87,7 @@ export async function refresh(req: Request, res: Response) {
   const user = await prisma.user.findUnique({ where: { id: payload.sub } });
   if (!user) throw ApiError.unauthorized();
 
-  const newPayload = { sub: user.id, role: user.role, employeeId: user.employeeId };
+  const newPayload = { sub: user.id, role: user.role, employeeId: user.employeeId, managedDepartmentId: user.managedDepartmentId };
   res.json({
     accessToken: signAccessToken(newPayload),
     refreshToken: signRefreshToken(newPayload),
@@ -83,6 +98,7 @@ export async function me(req: Request, res: Response) {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.sub },
     include: { employee: true },
+    // managedDepartmentId is a scalar field, always included
   });
   if (!user) throw ApiError.notFound('Usuario no encontrado');
   res.json({ user: publicUser(user) });
@@ -122,5 +138,25 @@ export async function resetPassword(req: Request, res: Response) {
     data: { password: await hashPassword(password), resetToken: null, resetExpires: null },
   });
   await recordAudit({ action: 'RESET_PASSWORD', entity: 'User', entityId: user.id, userId: user.id, metadata: { email: user.email } });
+  res.json({ message: 'Contraseña actualizada correctamente.' });
+}
+
+export async function directReset(req: Request, res: Response) {
+  const { email, password } = req.body as z.infer<typeof directResetSchema>;
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) throw ApiError.notFound('No existe ningún usuario con ese email');
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { password: await hashPassword(password), resetToken: null, resetExpires: null },
+  });
+  await recordAudit({
+    action: 'RESET_PASSWORD',
+    entity: 'User',
+    entityId: user.id,
+    userId: user.id,
+    metadata: { email: user.email, method: 'direct-modal' },
+  });
   res.json({ message: 'Contraseña actualizada correctamente.' });
 }

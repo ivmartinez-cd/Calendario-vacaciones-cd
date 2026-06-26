@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Save, Plus, Trash2, Settings2, Clock, Users, CalendarClock } from 'lucide-react';
+import { Save, Plus, Trash2, Settings2, Clock, Users, CalendarClock, ShieldCheck, Scale } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api, getErrorMessage } from '@/lib/api';
-import { SystemConfig, SeniorityTier } from '@/types';
+import { SystemConfig, SeniorityTier, UserWithRole, Department, Employee, VacationExclusion, PositionOverlapLimit } from '@/types';
 import { Button, Card, Input, Spinner } from '@/components/ui';
 
 const defaultTier: SeniorityTier = { minYears: 0, maxYears: 1, days: 14 };
@@ -15,7 +15,7 @@ export default function Settings() {
   const [advanceDays, setAdvanceDays] = useState(7);
   const [overlapPercent, setOverlapPercent] = useState(50);
   const [overlapCount, setOverlapCount] = useState(0);
-  const [activeTab, setActiveTab] = useState<'tiers' | 'rules' | 'cycles'>('tiers');
+  const [activeTab, setActiveTab] = useState<'tiers' | 'rules' | 'cycles' | 'users' | 'overlaps'>('tiers');
   // Ciclos anuales
   const [nextYearOpenMonth, setNextYearOpenMonth] = useState(10);
   const [nextYearOpenDay, setNextYearOpenDay] = useState(1);
@@ -24,6 +24,19 @@ export default function Settings() {
   const [allowCarryOver, setAllowCarryOver] = useState(true);
   const [maxCarryOverDays, setMaxCarryOverDays] = useState(0);
   const [openingCycle, setOpeningCycle] = useState(false);
+  // Usuarios y Roles
+  const [usersData, setUsersData] = useState<UserWithRole[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [savingUser, setSavingUser] = useState<string | null>(null);
+  // Solapamientos
+  const [exclusions, setExclusions] = useState<VacationExclusion[]>([]);
+  const [positionLimits, setPositionLimits] = useState<PositionOverlapLimit[]>([]);
+  const [overlapEmployees, setOverlapEmployees] = useState<Employee[]>([]);
+  const [loadingOverlaps, setLoadingOverlaps] = useState(false);
+  const [exclusionForm, setExclusionForm] = useState({ employeeAId: '', employeeBId: '' });
+  const [posLimitForm, setPosLimitForm] = useState({ position: '', maxEmployees: 1 });
+  const [savingExclusion, setSavingExclusion] = useState(false);
+  const [savingPosLimit, setSavingPosLimit] = useState(false);
 
   async function load() {
     const { data: cfg } = await api.get<SystemConfig>('/settings');
@@ -43,6 +56,120 @@ export default function Settings() {
   useEffect(() => {
     load().finally(() => setLoading(false));
   }, []);
+
+  async function loadUsersTab() {
+    const [{ data: u }, { data: d }] = await Promise.all([
+      api.get<UserWithRole[]>('/users'),
+      api.get<Department[]>('/departments'),
+    ]);
+    setUsersData(u);
+    setDepartments(d);
+  }
+
+  useEffect(() => {
+    if (activeTab === 'users') loadUsersTab();
+  }, [activeTab]);
+
+  async function loadOverlapsTab() {
+    setLoadingOverlaps(true);
+    try {
+      const [{ data: excl }, { data: limits }, { data: emps }] = await Promise.all([
+        api.get<VacationExclusion[]>('/settings/exclusions'),
+        api.get<PositionOverlapLimit[]>('/settings/position-limits'),
+        api.get<Employee[]>('/employees?status=ACTIVE'),
+      ]);
+      setExclusions(excl);
+      setPositionLimits(limits);
+      setOverlapEmployees(emps.filter((e) => e.status === 'ACTIVE'));
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setLoadingOverlaps(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'overlaps') loadOverlapsTab();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  async function addExclusion(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingExclusion(true);
+    try {
+      const { data } = await api.post<VacationExclusion>('/settings/exclusions', exclusionForm);
+      setExclusions((prev) => [data, ...prev]);
+      setExclusionForm({ employeeAId: '', employeeBId: '' });
+      toast.success('Exclusión agregada');
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setSavingExclusion(false);
+    }
+  }
+
+  async function removeExclusion(id: string) {
+    if (!confirm('¿Eliminar esta exclusión?')) return;
+    try {
+      await api.delete(`/settings/exclusions/${id}`);
+      setExclusions((prev) => prev.filter((e) => e.id !== id));
+      toast.success('Exclusión eliminada');
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    }
+  }
+
+  async function addPositionLimit(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingPosLimit(true);
+    try {
+      const { data } = await api.post<PositionOverlapLimit>('/settings/position-limits', {
+        position: posLimitForm.position,
+        maxEmployees: posLimitForm.maxEmployees,
+      });
+      setPositionLimits((prev) => {
+        const exists = prev.findIndex((p) => p.id === data.id);
+        if (exists >= 0) return prev.map((p) => (p.id === data.id ? data : p));
+        return [...prev, data].sort((a, b) => a.position.localeCompare(b.position));
+      });
+      setPosLimitForm({ position: '', maxEmployees: 1 });
+      toast.success('Regla guardada');
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setSavingPosLimit(false);
+    }
+  }
+
+  async function removePositionLimit(id: string) {
+    if (!confirm('¿Eliminar esta regla?')) return;
+    try {
+      await api.delete(`/settings/position-limits/${id}`);
+      setPositionLimits((prev) => prev.filter((p) => p.id !== id));
+      toast.success('Regla eliminada');
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    }
+  }
+
+  async function updateUserRole(userId: string, role: string, managedDepartmentId: string | null) {
+    setSavingUser(userId);
+    try {
+      const { data } = await api.put<UserWithRole>(`/users/${userId}/role`, { role, managedDepartmentId });
+      setUsersData((prev) =>
+        prev.map((u) =>
+          u.id === data.id
+            ? { ...u, role: data.role, managedDepartmentId: data.managedDepartmentId, managedDepartmentName: data.managedDepartmentName }
+            : u,
+        ),
+      );
+      toast.success('Rol actualizado');
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setSavingUser(null);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -93,7 +220,11 @@ export default function Settings() {
     { id: 'tiers' as const, label: 'Antigüedad y Días', icon: Settings2 },
     { id: 'rules' as const, label: 'Reglas de Solicitud', icon: Clock },
     { id: 'cycles' as const, label: 'Ciclos Anuales', icon: CalendarClock },
+    { id: 'users' as const, label: 'Usuarios y Roles', icon: ShieldCheck },
+    { id: 'overlaps' as const, label: 'Solapamientos', icon: Scale },
   ];
+
+  const uniquePositions = [...new Set(overlapEmployees.map((e) => e.position))].sort();
 
   async function forceOpenNextYear() {
     const nextYearYear = new Date().getFullYear() + 1;
@@ -420,6 +551,278 @@ export default function Settings() {
           </Card>
         </div>
       )}
+
+      {/* Tab: Solapamientos */}
+      {activeTab === 'overlaps' && (
+        loadingOverlaps ? (
+          <div className="flex h-64 items-center justify-center"><Spinner className="h-8 w-8" /></div>
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Exclusiones mutuas */}
+            <Card className="p-6">
+              <div className="mb-5 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400">
+                  <Scale className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="font-semibold">Exclusiones Mutuas</h2>
+                  <p className="text-sm text-muted-foreground">Pares de empleados que no pueden solapar vacaciones</p>
+                </div>
+              </div>
+
+              <form onSubmit={addExclusion} className="mb-5 space-y-3">
+                <div>
+                  <label className="text-sm font-medium">Empleado A</label>
+                  <select
+                    value={exclusionForm.employeeAId}
+                    onChange={(e) => setExclusionForm({ ...exclusionForm, employeeAId: e.target.value })}
+                    required
+                    className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">Seleccionar empleado...</option>
+                    {overlapEmployees
+                      .filter((e) => e.id !== exclusionForm.employeeBId)
+                      .map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {e.firstName} {e.lastName} — {e.position}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Empleado B</label>
+                  <select
+                    value={exclusionForm.employeeBId}
+                    onChange={(e) => setExclusionForm({ ...exclusionForm, employeeBId: e.target.value })}
+                    required
+                    className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">Seleccionar empleado...</option>
+                    {overlapEmployees
+                      .filter((e) => e.id !== exclusionForm.employeeAId)
+                      .map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {e.firstName} {e.lastName} — {e.position}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <Button type="submit" loading={savingExclusion} size="sm">
+                  <Plus className="h-4 w-4" /> Agregar exclusión
+                </Button>
+              </form>
+
+              {exclusions.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No hay exclusiones configuradas</p>
+              ) : (
+                <div className="space-y-2">
+                  {exclusions.map((exc) => (
+                    <div key={exc.id} className="flex items-center justify-between rounded-lg border border-border bg-background p-3">
+                      <p className="text-sm">
+                        <span className="font-medium">{exc.employeeA.firstName} {exc.employeeA.lastName}</span>
+                        <span className="mx-2 text-muted-foreground">vs</span>
+                        <span className="font-medium">{exc.employeeB.firstName} {exc.employeeB.lastName}</span>
+                      </p>
+                      <button
+                        onClick={() => removeExclusion(exc.id)}
+                        className="rounded-md p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            {/* Límites por cargo */}
+            <Card className="p-6">
+              <div className="mb-5 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400">
+                  <Users className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="font-semibold">Límites por Cargo</h2>
+                  <p className="text-sm text-muted-foreground">Máximo de personas del mismo cargo en vacaciones simultáneas</p>
+                </div>
+              </div>
+
+              <form onSubmit={addPositionLimit} className="mb-5 space-y-3">
+                <div>
+                  <label className="text-sm font-medium">Cargo / Posición</label>
+                  <input
+                    list="positions-datalist"
+                    value={posLimitForm.position}
+                    onChange={(e) => setPosLimitForm({ ...posLimitForm, position: e.target.value })}
+                    required
+                    placeholder="Ej: Operador Mesa de Ayuda"
+                    className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <datalist id="positions-datalist">
+                    {uniquePositions.map((p) => <option key={p} value={p} />)}
+                  </datalist>
+                </div>
+                <Input
+                  label="Límite máximo simultáneo"
+                  type="number"
+                  min={1}
+                  value={posLimitForm.maxEmployees}
+                  onChange={(e) => setPosLimitForm({ ...posLimitForm, maxEmployees: parseInt(e.target.value) || 1 })}
+                  required
+                />
+                <Button type="submit" loading={savingPosLimit} size="sm">
+                  <Plus className="h-4 w-4" /> Agregar regla
+                </Button>
+              </form>
+
+              {positionLimits.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No hay límites configurados</p>
+              ) : (
+                <div className="space-y-2">
+                  {positionLimits.map((pl) => (
+                    <div key={pl.id} className="flex items-center justify-between rounded-lg border border-border bg-background p-3">
+                      <div className="text-sm">
+                        <span className="font-medium">{pl.position}</span>
+                        <span className="ml-2 text-muted-foreground">— Máximo {pl.maxEmployees} a la vez</span>
+                      </div>
+                      <button
+                        onClick={() => removePositionLimit(pl.id)}
+                        className="rounded-md p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </div>
+        )
+      )}
+
+      {/* Tab: Usuarios y Roles */}
+      {activeTab === 'users' && (
+        <Card className="p-6">
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold">Usuarios y Roles</h2>
+            <p className="text-sm text-muted-foreground">
+              Asigná rol y sector a cada usuario. Los <strong>Jefes de sector</strong> solo pueden ver y aprobar solicitudes de su sector asignado.
+            </p>
+          </div>
+
+          {usersData.length === 0 ? (
+            <div className="flex h-32 items-center justify-center">
+              <Spinner className="h-6 w-6" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
+                    <th className="pb-3 pr-4">Usuario</th>
+                    <th className="pb-3 pr-4">Rol</th>
+                    <th className="pb-3 pr-4">Sector a cargo</th>
+                    <th className="pb-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {usersData.map((u) => (
+                    <UserRoleRow
+                      key={u.id}
+                      user={u}
+                      departments={departments}
+                      saving={savingUser === u.id}
+                      onSave={(role, deptId) => updateUserRole(u.id, role, deptId)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/30">
+            <p className="text-xs font-medium text-blue-700 dark:text-blue-400">Referencia de roles</p>
+            <ul className="mt-2 space-y-1 text-xs text-blue-600 dark:text-blue-300">
+              <li><strong>Administrador:</strong> acceso completo a todos los sectores, empleados y configuración.</li>
+              <li><strong>Jefe de sector:</strong> solo ve y aprueba solicitudes del sector asignado. No puede aprobar la propia.</li>
+              <li><strong>Empleado:</strong> solo gestiona sus propias solicitudes de vacaciones. El cargo que se muestra es el asignado en su perfil.</li>
+            </ul>
+          </div>
+        </Card>
+      )}
     </div>
+  );
+}
+
+interface UserRoleRowProps {
+  user: UserWithRole;
+  departments: Department[];
+  saving: boolean;
+  onSave: (role: string, managedDepartmentId: string | null) => void;
+}
+
+function UserRoleRow({ user, departments, saving, onSave }: UserRoleRowProps) {
+  const [role, setRole] = useState(user.role);
+  const [deptId, setDeptId] = useState<string>(user.managedDepartmentId ?? '');
+  const dirty = role !== user.role || (role === 'MANAGER' && deptId !== (user.managedDepartmentId ?? ''));
+
+  function handleSave() {
+    onSave(role, role === 'MANAGER' ? (deptId || null) : null);
+  }
+
+  const ROLE_LABELS: Record<string, string> = {
+    ADMIN: 'Administrador',
+    MANAGER: 'Jefe de sector',
+    EMPLOYEE: 'Empleado',
+  };
+
+  return (
+    <tr className="group">
+      <td className="py-3 pr-4">
+        <p className="font-medium">{user.employeeName ?? '—'}</p>
+        <p className="text-xs text-muted-foreground">{user.email}</p>
+        {user.employeePosition && <p className="text-xs text-muted-foreground">{user.employeePosition}</p>}
+      </td>
+      <td className="py-3 pr-4">
+        <select
+          value={role}
+          onChange={(e) => {
+            setRole(e.target.value as typeof role);
+            if (e.target.value !== 'MANAGER') setDeptId('');
+          }}
+          className="rounded-md border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+        >
+          {(['ADMIN', 'MANAGER', 'EMPLOYEE'] as const).map((r) => (
+            <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+          ))}
+        </select>
+      </td>
+      <td className="py-3 pr-4">
+        {role === 'MANAGER' ? (
+          <select
+            value={deptId}
+            onChange={(e) => setDeptId(e.target.value)}
+            className="rounded-md border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <option value="">— seleccionar sector —</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </td>
+      <td className="py-3">
+        {dirty && (
+          <Button size="sm" onClick={handleSave} loading={saving} disabled={role === 'MANAGER' && !deptId}>
+            <Save className="h-3.5 w-3.5" />
+            Guardar
+          </Button>
+        )}
+      </td>
+    </tr>
   );
 }

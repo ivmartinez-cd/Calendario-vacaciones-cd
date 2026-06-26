@@ -39,3 +39,6 @@ export function authorize(...roles: Role[]) {
 
 /** Atajo para restringir solo a administradores. */
 export const requireAdmin = authorize(Role.ADMIN);
+
+/** Permite acceso a administradores y managers de sector. */
+export const requireAdminOrManager = authorize(Role.ADMIN, Role.MANAGER);

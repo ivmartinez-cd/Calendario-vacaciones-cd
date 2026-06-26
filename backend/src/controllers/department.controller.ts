@@ -35,8 +35,12 @@ export async function update(req: Request, res: Response) {
 }
 
 export async function remove(req: Request, res: Response) {
-  const count = await prisma.employee.count({ where: { departmentId: req.params.id } });
-  if (count > 0) throw ApiError.conflict('No se puede eliminar un departamento con empleados asignados');
+  const [employeeCount, managerCount] = await Promise.all([
+    prisma.employee.count({ where: { departmentId: req.params.id } }),
+    prisma.user.count({ where: { managedDepartmentId: req.params.id } }),
+  ]);
+  if (employeeCount > 0) throw ApiError.conflict('No se puede eliminar un departamento con empleados asignados');
+  if (managerCount > 0) throw ApiError.conflict('No se puede eliminar un departamento con jefes de sector asignados');
   const dept = await prisma.department.findUnique({ where: { id: req.params.id } });
   await prisma.department.delete({ where: { id: req.params.id } });
   await recordAudit({ action: 'DELETE', entity: 'Department', entityId: req.params.id, userId: req.user!.sub, metadata: { name: dept?.name } });

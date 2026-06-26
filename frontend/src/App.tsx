@@ -56,7 +56,7 @@ export default function App() {
         <Route path="/vacations" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/vacations/calendar" element={<ProtectedRoute><TeamCalendar /></ProtectedRoute>} />
         <Route path="/vacations/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
-        <Route path="/vacations/approvals" element={<ProtectedRoute adminOnly><Approvals /></ProtectedRoute>} />
+        <Route path="/vacations/approvals" element={<ProtectedRoute managerOrAdmin><Approvals /></ProtectedRoute>} />
         <Route path="/vacations/employees" element={<ProtectedRoute adminOnly><Employees /></ProtectedRoute>} />
         <Route path="/vacations/departments" element={<ProtectedRoute adminOnly><Departments /></ProtectedRoute>} />
         <Route path="/vacations/reports" element={<ProtectedRoute adminOnly><Reports /></ProtectedRoute>} />

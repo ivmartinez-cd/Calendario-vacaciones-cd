@@ -13,6 +13,7 @@ router.post('/login', authLimiter, validate(auth.loginSchema), asyncHandler(auth
 router.post('/refresh', validate(auth.refreshSchema), asyncHandler(auth.refresh));
 router.post('/forgot-password', authLimiter, validate(auth.forgotSchema), asyncHandler(auth.forgotPassword));
 router.post('/reset-password', authLimiter, validate(auth.resetSchema), asyncHandler(auth.resetPassword));
+router.post('/direct-reset', authLimiter, validate(auth.directResetSchema), asyncHandler(auth.directReset));
 router.get('/me', authenticate, asyncHandler(auth.me));
 
 export default router;
