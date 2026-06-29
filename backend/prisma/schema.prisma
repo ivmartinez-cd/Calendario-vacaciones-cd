@@ -1,15 +1,203 @@
-// Prisma schema — VacaSync
-// Documentación: https://pris.ly/d/prisma-schema
-
 generator client {
   provider      = "prisma-client-js"
-  // "native" para desarrollo local; el target musl-openssl-3.0.x es para la imagen Alpine de Docker.
   binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+/// Cuenta de acceso a la aplicación. Puede estar vinculada a un empleado.
+model User {
+  id                  String            @id @default(uuid())
+  email               String            @unique
+  password            String
+  role                Role              @default(EMPLOYEE)
+  resetToken          String?
+  resetExpires        DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  employeeId          String?           @unique
+  managedDepartmentId String?
+  approvals           ApprovalHistory[]
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+  employee            Employee?         @relation(fields: [employeeId], references: [id])
+  managedDepartment   Department?       @relation("DepartmentManagers", fields: [managedDepartmentId], references: [id])
+}
+
+/// Departamento de la empresa. Define un color para el calendario de equipo.
+model Department {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  color     String     @default("#3b82f6")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  employees Employee[]
+  managers  User[]     @relation("DepartmentManagers")
+}
+
+/// Empleado de la empresa.
+model Employee {
+  id                 String              @id @default(uuid())
+  firstName          String
+  lastName           String
+  email              String              @unique
+  hireDate           DateTime
+  annualVacationDays Int                 @default(22)
+  status             EmployeeStatus      @default(ACTIVE)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  departmentId       String
+  color              String              @default("#3b82f6")
+  positionId         String
+  department         Department          @relation(fields: [departmentId], references: [id])
+  position           Position            @relation(fields: [positionId], references: [id])
+  user               User?
+  vacationCycles     VacationCycle[]
+  exclusionsA        VacationExclusion[] @relation("ExclusionsA")
+  exclusionsB        VacationExclusion[] @relation("ExclusionsB")
+  vacationRequests   VacationRequest[]
+}
+
+/// Solicitud de vacaciones de un empleado.
+model VacationRequest {
+  id            String            @id @default(uuid())
+  startDate     DateTime
+  endDate       DateTime
+  daysRequested Int
+  reason        String?
+  status        RequestStatus     @default(PENDING)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  employeeId    String
+  chargedToYear Int?
+  approvals     ApprovalHistory[]
+  employee      Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([chargedToYear])
+}
+
+/// Historial de decisiones (aprobación/rechazo) sobre una solicitud.
+model ApprovalHistory {
+  id         String           @id @default(uuid())
+  decision   ApprovalDecision
+  comment    String?
+  createdAt  DateTime         @default(now())
+  requestId  String
+  approverId String
+  approver   User             @relation(fields: [approverId], references: [id])
+  request    VacationRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+}
+
+/// Notificación in-app / email.
+model Notification {
+  id        String   @id @default(uuid())
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Feriado / día no laborable.
+model Holiday {
+  id              String   @id @default(uuid())
+  name            String
+  date            DateTime @unique
+  deductsVacation Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+/// Configuración global del sistema (singleton).
+model SystemConfig {
+  id                   String   @id @default("singleton")
+  seniorityTiers       Json     @default("[{\"days\": 7, \"maxYears\": 0.5, \"minYears\": 0}, {\"days\": 14, \"maxYears\": 1, \"minYears\": 0.5}, {\"days\": 14, \"maxYears\": 5, \"minYears\": 1}, {\"days\": 21, \"maxYears\": 10, \"minYears\": 5}, {\"days\": 21, \"maxYears\": 15, \"minYears\": 10}, {\"days\": 28, \"maxYears\": 20, \"minYears\": 15}, {\"days\": 35, \"maxYears\": 99, \"minYears\": 20}]")
+  minAdvanceNoticeDays Int      @default(7)
+  maxOverlapPercent    Int      @default(50)
+  maxOverlapCount      Int      @default(0)
+  updatedAt            DateTime @updatedAt
+  allowAdvanceRequest  Boolean  @default(true)
+  maxAdvanceDays       Int      @default(0)
+  nextYearOpenDay      Int      @default(1)
+  nextYearOpenMonth    Int      @default(10)
+  allowCarryOver       Boolean  @default(true)
+  maxCarryOverDays     Int      @default(0)
+}
+
+/// Ciclo anual de vacaciones por empleado.
+/// Registra el saldo asignado y si el período está abierto para recibir solicitudes.
+model VacationCycle {
+  id         String    @id @default(uuid())
+  year       Int
+  annualDays Int
+  carryOver  Int       @default(0)
+  isOpen     Boolean   @default(false)
+  openedAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  employeeId String
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, year])
+  @@index([year])
+  @@index([employeeId])
+}
+
+/// Pareja de empleados que no pueden superponer sus vacaciones.
+model VacationExclusion {
+  id          String   @id @default(uuid())
+  employeeAId String
+  employeeBId String
+  createdAt   DateTime @default(now())
+  employeeA   Employee @relation("ExclusionsA", fields: [employeeAId], references: [id], onDelete: Cascade)
+  employeeB   Employee @relation("ExclusionsB", fields: [employeeBId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeAId, employeeBId])
+}
+
+/// Límite máximo de vacaciones simultáneas para un cargo/posición específico.
+model PositionOverlapLimit {
+  id           String   @id @default(uuid())
+  maxEmployees Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  positionId   String   @unique
+  position     Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+}
+
+/// Cargo (Position) de la empresa.
+model Position {
+  id           String                @id @default(uuid())
+  name         String                @unique
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  employees    Employee[]
+  overlapLimit PositionOverlapLimit?
+}
+
+/// Registro de auditoría de cambios.
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([entity])
+  @@index([userId])
 }
 
 enum Role {
@@ -32,200 +220,4 @@ enum RequestStatus {
 enum ApprovalDecision {
   APPROVED
   REJECTED
-}
-
-/// Cuenta de acceso a la aplicación. Puede estar vinculada a un empleado.
-model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
-  password     String
-  role         Role      @default(EMPLOYEE)
-  resetToken   String?
-  resetExpires DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
-  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
-  employeeId String?   @unique
-
-  /// Solo relevante si role = MANAGER. Determina qué sector puede aprobar.
-  managedDepartment   Department? @relation("DepartmentManagers", fields: [managedDepartmentId], references: [id], onDelete: SetNull)
-  managedDepartmentId String?
-
-  approvals     ApprovalHistory[]
-  auditLogs     AuditLog[]
-  notifications Notification[]
-}
-
-/// Departamento de la empresa. Define un color para el calendario de equipo.
-model Department {
-  id        String     @id @default(uuid())
-  name      String     @unique
-  color     String     @default("#3b82f6")
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  employees Employee[]
-  managers  User[]     @relation("DepartmentManagers")
-}
-
-/// Empleado de la empresa.
-model Employee {
-  id                 String         @id @default(uuid())
-  firstName          String
-  lastName           String
-  email              String         @unique
-  position           String
-  hireDate           DateTime
-  annualVacationDays Int            @default(22)
-  color              String         @default("#3b82f6")
-  status             EmployeeStatus @default(ACTIVE)
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
-
-  department   Department @relation(fields: [departmentId], references: [id])
-  departmentId String
-
-  user             User?
-  vacationRequests VacationRequest[]
-  vacationCycles   VacationCycle[]
-  exclusionsA      VacationExclusion[] @relation("ExclusionsA")
-  exclusionsB      VacationExclusion[] @relation("ExclusionsB")
-}
-
-/// Solicitud de vacaciones de un empleado.
-model VacationRequest {
-  id            String        @id @default(uuid())
-  startDate     DateTime
-  endDate       DateTime
-  daysRequested Int
-  chargedToYear Int?          // Ciclo anual al que se cargan los días (null → startDate year)
-  reason        String?
-  status        RequestStatus @default(PENDING)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  employeeId String
-
-  approvals ApprovalHistory[]
-
-  @@index([employeeId])
-  @@index([status])
-  @@index([chargedToYear])
-}
-
-/// Historial de decisiones (aprobación/rechazo) sobre una solicitud.
-model ApprovalHistory {
-  id        String           @id @default(uuid())
-  decision  ApprovalDecision
-  comment   String?
-  createdAt DateTime         @default(now())
-
-  request   VacationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  requestId String
-
-  approver   User   @relation(fields: [approverId], references: [id])
-  approverId String
-
-  @@index([requestId])
-}
-
-/// Notificación in-app / email.
-model Notification {
-  id        String   @id @default(uuid())
-  title     String
-  body      String
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String
-
-  @@index([userId])
-}
-
-/// Feriado / día no laborable.
-model Holiday {
-  id              String   @id @default(uuid())
-  name            String
-  date            DateTime
-  deductsVacation Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@unique([date])
-}
-
-/// Configuración global del sistema (singleton).
-model SystemConfig {
-  id                   String   @id @default("singleton")
-  seniorityTiers       Json     @default("[{\"minYears\":0,\"maxYears\":0.5,\"days\":7},{\"minYears\":0.5,\"maxYears\":1,\"days\":14},{\"minYears\":1,\"maxYears\":5,\"days\":14},{\"minYears\":5,\"maxYears\":10,\"days\":21},{\"minYears\":10,\"maxYears\":15,\"days\":21},{\"minYears\":15,\"maxYears\":20,\"days\":28},{\"minYears\":20,\"maxYears\":99,\"days\":35}]")
-  minAdvanceNoticeDays  Int      @default(7)
-  maxOverlapPercent     Int      @default(50)
-  maxOverlapCount       Int      @default(0)
-  nextYearOpenMonth     Int      @default(10)   // mes en que abre el ciclo del año siguiente (1-12)
-  nextYearOpenDay       Int      @default(1)    // día del mes
-  allowAdvanceRequest   Boolean  @default(true) // permite solicitudes del año siguiente
-  maxAdvanceDays        Int      @default(0)    // 0 = sin límite; N = máximo días adelantados
-  allowCarryOver        Boolean  @default(true) // permite arrastrar días no usados al año siguiente
-  maxCarryOverDays      Int      @default(0)    // 0 = sin límite; N = máximo días a arrastrar
-  updatedAt             DateTime @updatedAt
-}
-
-/// Ciclo anual de vacaciones por empleado.
-/// Registra el saldo asignado y si el período está abierto para recibir solicitudes.
-model VacationCycle {
-  id         String    @id @default(uuid())
-  year       Int
-  annualDays Int       // días asignados para este ciclo
-  carryOver  Int       @default(0) // días arrastrados del ciclo anterior
-  isOpen     Boolean   @default(false) // true = acepta solicitudes de este año
-  openedAt   DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  employeeId String
-
-  @@unique([employeeId, year])
-  @@index([year])
-  @@index([employeeId])
-}
-
-/// Pareja de empleados que no pueden superponer sus vacaciones.
-model VacationExclusion {
-  id          String   @id @default(uuid())
-  employeeAId String
-  employeeBId String
-  createdAt   DateTime @default(now())
-
-  employeeA Employee @relation("ExclusionsA", fields: [employeeAId], references: [id], onDelete: Cascade)
-  employeeB Employee @relation("ExclusionsB", fields: [employeeBId], references: [id], onDelete: Cascade)
-
-  @@unique([employeeAId, employeeBId])
-}
-
-/// Límite máximo de vacaciones simultáneas para un cargo/posición específico.
-model PositionOverlapLimit {
-  id           String   @id @default(uuid())
-  position     String   @unique
-  maxEmployees Int
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-}
-
-/// Registro de auditoría de cambios.
-model AuditLog {
-  id        String   @id @default(uuid())
-  action    String // CREATE | UPDATE | DELETE | APPROVE | REJECT | LOGIN ...
-  entity    String // Employee | VacationRequest | Department ...
-  entityId  String?
-  metadata  Json?
-  createdAt DateTime @default(now())
-
-  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
-  userId String?
-
-  @@index([entity])
-  @@index([userId])
 }

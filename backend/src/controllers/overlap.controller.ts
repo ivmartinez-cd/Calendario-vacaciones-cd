@@ -14,7 +14,7 @@ export const createExclusionSchema = z
   });
 
 export const upsertPositionLimitSchema = z.object({
-  position: z.string().min(1).max(200),
+  positionId: z.string().uuid(),
   maxEmployees: z.number().int().min(1),
 });
 
@@ -62,15 +62,15 @@ export async function deleteExclusion(req: Request, res: Response) {
 }
 
 export async function listPositionLimits(_req: Request, res: Response) {
-  const limits = await prisma.positionOverlapLimit.findMany({ orderBy: { position: 'asc' } });
+  const limits = await prisma.positionOverlapLimit.findMany({ include: { position: true } });
   res.json(limits);
 }
 
 export async function upsertPositionLimit(req: Request, res: Response) {
   const body = req.body as z.infer<typeof upsertPositionLimitSchema>;
   const limit = await prisma.positionOverlapLimit.upsert({
-    where: { position: body.position },
-    create: { position: body.position, maxEmployees: body.maxEmployees },
+    where: { positionId: body.positionId },
+    create: { positionId: body.positionId, maxEmployees: body.maxEmployees },
     update: { maxEmployees: body.maxEmployees },
   });
   res.json(limit);

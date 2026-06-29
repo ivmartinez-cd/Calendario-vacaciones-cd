@@ -161,7 +161,7 @@ export async function create(req: Request, res: Response) {
   const employeeId = isAdmin && body.employeeId ? body.employeeId : req.user!.employeeId;
   if (!employeeId) throw ApiError.badRequest('No se ha indicado el empleado');
 
-  const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+  const employee = await prisma.employee.findUnique({ where: { id: employeeId }, include: { position: true } });
   if (!employee) throw ApiError.notFound('Empleado no encontrado');
   if (employee.status === 'INACTIVE') throw ApiError.badRequest('El empleado está inactivo');
 
@@ -256,14 +256,14 @@ export async function create(req: Request, res: Response) {
 
   // Validación B: límite de simultaneidad por cargo
   const posLimit = await prisma.positionOverlapLimit.findUnique({
-    where: { position: employee.position },
+    where: { positionId: employee.positionId },
   });
   if (posLimit) {
     const othersOnVacation = await prisma.vacationRequest.findMany({
       where: {
         employeeId: { not: employeeId },
         status: { in: [RequestStatus.APPROVED, RequestStatus.PENDING] },
-        employee: { position: employee.position, status: 'ACTIVE' },
+        employee: { positionId: employee.positionId, status: 'ACTIVE' },
         startDate: { lte: body.endDate },
         endDate: { gte: body.startDate },
       },
@@ -279,7 +279,7 @@ export async function create(req: Request, res: Response) {
         ).length;
         if (count >= posLimit.maxEmployees) {
           throw ApiError.conflict(
-            `Se supera el límite máximo de empleados de la posición '${employee.position}' tomándose vacaciones al mismo tiempo (Límite: ${posLimit.maxEmployees}).`,
+            `Se supera el límite máximo de empleados de la posición '${employee.position?.name || 'desconocida'}' tomándose vacaciones al mismo tiempo (Límite: ${posLimit.maxEmployees}).`,
           );
         }
       }
@@ -422,7 +422,7 @@ export async function update(req: Request, res: Response) {
   const body = req.body as z.infer<typeof updateRequestSchema>;
   const request = await prisma.vacationRequest.findUnique({
     where: { id: req.params.id },
-    include: { employee: true },
+    include: { employee: { include: { position: true } } },
   });
   if (!request) throw ApiError.notFound('Solicitud no encontrada');
 
@@ -493,7 +493,7 @@ export async function update(req: Request, res: Response) {
 
   // Validación B: límite de simultaneidad por cargo
   const updatePosLimit = await prisma.positionOverlapLimit.findUnique({
-    where: { position: request.employee.position },
+    where: { positionId: request.employee.positionId },
   });
   if (updatePosLimit) {
     const othersOnVacation = await prisma.vacationRequest.findMany({
@@ -501,7 +501,7 @@ export async function update(req: Request, res: Response) {
         id: { not: request.id },
         employeeId: { not: request.employeeId },
         status: { in: [RequestStatus.APPROVED, RequestStatus.PENDING] },
-        employee: { position: request.employee.position, status: 'ACTIVE' },
+        employee: { positionId: request.employee.positionId, status: 'ACTIVE' },
         startDate: { lte: body.endDate },
         endDate: { gte: body.startDate },
       },
@@ -517,7 +517,7 @@ export async function update(req: Request, res: Response) {
         ).length;
         if (count >= updatePosLimit.maxEmployees) {
           throw ApiError.conflict(
-            `Se supera el límite máximo de empleados de la posición '${request.employee.position}' tomándose vacaciones al mismo tiempo (Límite: ${updatePosLimit.maxEmployees}).`,
+            `Se supera el límite máximo de empleados de la posición '${request.employee.position?.name || 'desconocida'}' tomándose vacaciones al mismo tiempo (Límite: ${updatePosLimit.maxEmployees}).`,
           );
         }
       }

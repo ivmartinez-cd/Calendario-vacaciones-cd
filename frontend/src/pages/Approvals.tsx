@@ -327,7 +327,7 @@ function DetailModal({
                 <div className="rounded-lg border border-border p-4">
                   <p className="text-xs font-medium text-muted-foreground">Empleado</p>
                   <p className="mt-1 text-base font-semibold">{request.employee.firstName} {request.employee.lastName}</p>
-                  <p className="text-sm text-muted-foreground">{request.employee.position}</p>
+                  <p className="text-sm text-muted-foreground">{request.employee.position?.name}</p>
                   <span className="mt-1 inline-flex items-center gap-1.5 text-sm">
                     <span className="h-2 w-2 rounded-full" style={{ background: request.employee.department.color }} />
                     {request.employee.department.name}

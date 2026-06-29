@@ -26,7 +26,7 @@ export async function list(_req: Request, res: Response) {
       role: u.role,
       employeeId: u.employeeId,
       employeeName: u.employee ? `${u.employee.firstName} ${u.employee.lastName}` : null,
-      employeePosition: u.employee?.position ?? null,
+      employeePosition: u.employee?.position?.name ?? null,
       managedDepartmentId: u.managedDepartmentId,
       managedDepartmentName: u.managedDepartment?.name ?? null,
     })),

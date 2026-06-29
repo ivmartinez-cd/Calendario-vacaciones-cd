@@ -17,6 +17,7 @@ import {
   PartyPopper,
   Settings,
   LayoutGrid,
+  Briefcase,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -39,6 +40,7 @@ const navItems: NavItem[] = [
   { to: '/vacations/approvals', label: 'Aprobaciones', icon: ClipboardCheck, managerOrAdmin: true },
   { to: '/vacations/employees', label: 'Empleados', icon: Users, adminOnly: true },
   { to: '/vacations/departments', label: 'Sectores', icon: Building2, adminOnly: true },
+  { to: '/vacations/positions', label: 'Cargos', icon: Briefcase, adminOnly: true },
   { to: '/vacations/holidays', label: 'Feriados', icon: PartyPopper, adminOnly: true },
   { to: '/vacations/reports', label: 'Reportes', icon: BarChart3, adminOnly: true },
   { to: '/vacations/audit', label: 'Auditoría', icon: ScrollText, adminOnly: true },

@@ -40,7 +40,7 @@ export const createEmployeeSchema = z.object({
   lastName: z.string().min(1),
   email: z.string().email(),
   departmentId: z.string().uuid(),
-  position: z.string().min(1),
+  positionId: z.string().uuid(),
   hireDate: z.coerce.date(),
   annualVacationDays: z.coerce.number().int().min(0).max(365).optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
@@ -77,13 +77,13 @@ export async function list(req: Request, res: Response) {
                 { firstName: { contains: search, mode: 'insensitive' } },
                 { lastName: { contains: search, mode: 'insensitive' } },
                 { email: { contains: search, mode: 'insensitive' } },
-                { position: { contains: search, mode: 'insensitive' } },
+                { position: { name: { contains: search, mode: 'insensitive' } } },
               ],
             }
           : {},
       ],
     },
-    include: { department: true, user: { select: { id: true } } },
+    include: { department: true, position: true, user: { select: { id: true } } },
     orderBy: [{ firstName: 'asc' }],
   });
 
@@ -109,7 +109,7 @@ export async function list(req: Request, res: Response) {
 export async function getById(req: Request, res: Response) {
   const employee = await prisma.employee.findUnique({
     where: { id: req.params.id },
-    include: { department: true, vacationRequests: { orderBy: { startDate: 'desc' } } },
+    include: { department: true, position: true, vacationRequests: { orderBy: { startDate: 'desc' } } },
   });
   if (!employee) throw ApiError.notFound('Empleado no encontrado');
 

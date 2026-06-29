@@ -21,7 +21,7 @@ const EMPLOYEE_COLORS = [
 ];
 import toast from 'react-hot-toast';
 import { api, getErrorMessage } from '@/lib/api';
-import { Department, Employee, VacationRequest } from '@/types';
+import { Department, Employee, VacationRequest, Position } from '@/types';
 import { Button, Card, Input, Modal, Select, Spinner, Badge } from '@/components/ui';
 import { StatusBadge } from '@/components/StatusBadge';
 import { formatDate } from '@/lib/utils';
@@ -47,7 +47,7 @@ interface FormState {
   lastName: string;
   email: string;
   departmentId: string;
-  position: string;
+  positionId: string;
   hireDate: string;
   color: string;
   status: 'ACTIVE' | 'INACTIVE';
@@ -61,7 +61,7 @@ const emptyForm: FormState = {
   lastName: '',
   email: '',
   departmentId: '',
-  position: '',
+  positionId: '',
   hireDate: '',
   color: '#3b82f6',
   status: 'ACTIVE',
@@ -100,6 +100,7 @@ type SortDir = 'asc' | 'desc';
 export default function Employees() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
@@ -113,12 +114,14 @@ export default function Employees() {
   const [showPassword, setShowPassword] = useState(false);
 
   async function load() {
-    const [emp, dep] = await Promise.all([
+    const [emp, dep, pos] = await Promise.all([
       api.get<Employee[]>('/employees', { params: { search: search || undefined, departmentId: deptFilter || undefined } }),
       api.get<Department[]>('/departments'),
+      api.get<Position[]>('/positions'),
     ]);
     setEmployees(emp.data);
     setDepartments(dep.data);
+    setPositions(pos.data);
   }
 
   useEffect(() => {
@@ -128,10 +131,7 @@ export default function Employees() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, deptFilter]);
 
-  const uniquePositions = useMemo(
-    () => [...new Set(employees.map((e) => e.position).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
-    [employees],
-  );
+  // removed uniquePositions
 
   const sorted = useMemo(() => {
     const list = [...employees];
@@ -145,7 +145,7 @@ export default function Employees() {
           break;
         }
         case 'department': cmp = a.department.name.localeCompare(b.department.name); break;
-        case 'position': cmp = a.position.localeCompare(b.position); break;
+        case 'position': cmp = a.position?.name.localeCompare(b.position?.name || '') || 0; break;
         case 'hireDate': cmp = new Date(a.hireDate).getTime() - new Date(b.hireDate).getTime(); break;
         case 'seniority': cmp = new Date(a.hireDate).getTime() - new Date(b.hireDate).getTime(); break;
         case 'available': cmp = (a.balance?.available ?? 0) - (b.balance?.available ?? 0); break;
@@ -194,7 +194,7 @@ export default function Employees() {
       lastName: e.lastName,
       email: e.email,
       departmentId: e.departmentId,
-      position: e.position,
+      positionId: e.positionId,
       hireDate: e.hireDate.slice(0, 10),
       color: e.color || '#3b82f6',
       status: e.status,
@@ -362,22 +362,14 @@ export default function Employees() {
                 </option>
               ))}
             </Select>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium">Cargo</label>
-              <input
-                list="positions-list"
-                value={form.position}
-                onChange={(e) => setForm({ ...form, position: e.target.value })}
-                placeholder="Seleccioná o escribí un cargo…"
-                required
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
-              />
-              <datalist id="positions-list">
-                {uniquePositions.map((p) => (
-                  <option key={p} value={p} />
-                ))}
-              </datalist>
-            </div>
+            <Select label="Cargo" value={form.positionId} onChange={(e) => setForm({ ...form, positionId: e.target.value })} required>
+              <option value="">Selecciona…</option>
+              {positions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
           </div>
           <Input label="Fecha de ingreso" type="date" value={form.hireDate} onChange={(e) => setForm({ ...form, hireDate: e.target.value })} required />
           <div>
@@ -600,7 +592,7 @@ function EmployeeRow({
             {employee.department.name}
           </span>
         </td>
-        <td className="px-4 py-3">{employee.position}</td>
+        <td className="px-4 py-3">{employee.position?.name}</td>
         <td className="px-4 py-3">{formatDate(employee.hireDate)}</td>
         <td className="px-4 py-3">
           <span className="font-medium">{getSeniority(employee.hireDate).label}</span>

@@ -30,6 +30,12 @@ export interface Department {
   _count?: { employees: number };
 }
 
+export interface Position {
+  id: string;
+  name: string;
+  _count?: { employees: number };
+}
+
 export interface Balance {
   annual: number;
   carryOver: number;
@@ -44,7 +50,8 @@ export interface Employee {
   firstName: string;
   lastName: string;
   email: string;
-  position: string;
+  positionId: string;
+  position: Position;
   hireDate: string;
   annualVacationDays: number;
   color: string;
@@ -179,13 +186,14 @@ export interface VacationExclusion {
   employeeAId: string;
   employeeBId: string;
   createdAt: string;
-  employeeA: { id: string; firstName: string; lastName: string; position: string };
-  employeeB: { id: string; firstName: string; lastName: string; position: string };
+  employeeA: { id: string; firstName: string; lastName: string; position: Position };
+  employeeB: { id: string; firstName: string; lastName: string; position: Position };
 }
 
 export interface PositionOverlapLimit {
   id: string;
-  position: string;
+  positionId: string;
+  position?: Position;
   maxEmployees: number;
   createdAt: string;
   updatedAt: string;

@@ -46,7 +46,7 @@ function publicUser(user: {
   role: string;
   employeeId: string | null;
   managedDepartmentId: string | null;
-  employee?: { firstName: string; lastName: string; position: string } | null;
+  employee?: { firstName: string; lastName: string; position: { name: string } } | null;
 }) {
   return {
     id: user.id,
@@ -55,13 +55,13 @@ function publicUser(user: {
     employeeId: user.employeeId,
     managedDepartmentId: user.managedDepartmentId,
     name: user.employee ? `${user.employee.firstName} ${user.employee.lastName}` : 'Administrador',
-    position: user.employee?.position ?? null,
+    position: user.employee?.position?.name ?? null,
   };
 }
 
 export async function login(req: Request, res: Response) {
   const { email, password } = req.body as z.infer<typeof loginSchema>;
-  const user = await prisma.user.findUnique({ where: { email }, include: { employee: true } });
+  const user = await prisma.user.findUnique({ where: { email }, include: { employee: { include: { position: true } } } });
   if (!user || !(await comparePassword(password, user.password))) {
     throw ApiError.unauthorized('Credenciales inválidas');
   }
@@ -97,7 +97,7 @@ export async function refresh(req: Request, res: Response) {
 export async function me(req: Request, res: Response) {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.sub },
-    include: { employee: true },
+    include: { employee: { include: { position: true } } },
     // managedDepartmentId is a scalar field, always included
   });
   if (!user) throw ApiError.notFound('Usuario no encontrado');

@@ -15,14 +15,14 @@ interface EmployeeReportRow {
 }
 
 async function buildEmployeeReport(): Promise<EmployeeReportRow[]> {
-  const employees = await prisma.employee.findMany({ include: { department: true }, orderBy: { firstName: 'asc' } });
+  const employees = await prisma.employee.findMany({ include: { department: true, position: true }, orderBy: { firstName: 'asc' } });
   return Promise.all(
     employees.map(async (e) => {
       const b = await getEmployeeBalance(e.id);
       return {
         name: `${e.firstName} ${e.lastName}`,
         department: e.department.name,
-        position: e.position,
+        position: e.position.name,
         annual: b.annual,
         used: b.used,
         pending: b.pending,

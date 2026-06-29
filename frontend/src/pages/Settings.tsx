@@ -3,7 +3,7 @@ import { Save, Plus, Trash2, Settings2, Clock, Users, CalendarClock, ShieldCheck
 import toast from 'react-hot-toast';
 import { api, getErrorMessage } from '@/lib/api';
 import { SystemConfig, SeniorityTier, UserWithRole, Department, Employee, VacationExclusion, PositionOverlapLimit } from '@/types';
-import { Button, Card, Input, Spinner } from '@/components/ui';
+import { Button, Card, Input, Spinner, Select } from '@/components/ui';
 
 const defaultTier: SeniorityTier = { minYears: 0, maxYears: 1, days: 14 };
 
@@ -34,9 +34,10 @@ export default function Settings() {
   const [overlapEmployees, setOverlapEmployees] = useState<Employee[]>([]);
   const [loadingOverlaps, setLoadingOverlaps] = useState(false);
   const [exclusionForm, setExclusionForm] = useState({ employeeAId: '', employeeBId: '' });
-  const [posLimitForm, setPosLimitForm] = useState({ position: '', maxEmployees: 1 });
+  const [posLimitForm, setPosLimitForm] = useState({ positionId: '', maxEmployees: 1 });
   const [savingExclusion, setSavingExclusion] = useState(false);
   const [savingPosLimit, setSavingPosLimit] = useState(false);
+  const [positions, setPositions] = useState<import('@/types').Position[]>([]);
 
   async function load() {
     const { data: cfg } = await api.get<SystemConfig>('/settings');
@@ -73,14 +74,16 @@ export default function Settings() {
   async function loadOverlapsTab() {
     setLoadingOverlaps(true);
     try {
-      const [{ data: excl }, { data: limits }, { data: emps }] = await Promise.all([
+      const [excls, limits, emps, posReq] = await Promise.all([
         api.get<VacationExclusion[]>('/settings/exclusions'),
         api.get<PositionOverlapLimit[]>('/settings/position-limits'),
-        api.get<Employee[]>('/employees?status=ACTIVE'),
+        api.get<Employee[]>('/employees'),
+        api.get<import('@/types').Position[]>('/positions'),
       ]);
-      setExclusions(excl);
-      setPositionLimits(limits);
-      setOverlapEmployees(emps.filter((e) => e.status === 'ACTIVE'));
+      setExclusions(excls.data);
+      setPositionLimits(limits.data);
+      setOverlapEmployees(emps.data.filter((e) => e.status === 'ACTIVE'));
+      setPositions(posReq.data);
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -124,15 +127,15 @@ export default function Settings() {
     setSavingPosLimit(true);
     try {
       const { data } = await api.post<PositionOverlapLimit>('/settings/position-limits', {
-        position: posLimitForm.position,
+        positionId: posLimitForm.positionId,
         maxEmployees: posLimitForm.maxEmployees,
       });
       setPositionLimits((prev) => {
         const exists = prev.findIndex((p) => p.id === data.id);
         if (exists >= 0) return prev.map((p) => (p.id === data.id ? data : p));
-        return [...prev, data].sort((a, b) => a.position.localeCompare(b.position));
+        return [...prev, data].sort((a, b) => (a.position?.name || '').localeCompare(b.position?.name || ''));
       });
-      setPosLimitForm({ position: '', maxEmployees: 1 });
+      setPosLimitForm({ positionId: '', maxEmployees: 1 });
       toast.success('Regla guardada');
     } catch (err) {
       toast.error(getErrorMessage(err));
@@ -224,7 +227,7 @@ export default function Settings() {
     { id: 'overlaps' as const, label: 'Solapamientos', icon: Scale },
   ];
 
-  const uniquePositions = [...new Set(overlapEmployees.map((e) => e.position))].sort();
+  // Removed uniquePositions, using positions directly
 
   async function forceOpenNextYear() {
     const nextYearYear = new Date().getFullYear() + 1;
@@ -584,7 +587,7 @@ export default function Settings() {
                       .filter((e) => e.id !== exclusionForm.employeeBId)
                       .map((e) => (
                         <option key={e.id} value={e.id}>
-                          {e.firstName} {e.lastName} — {e.position}
+                          {e.firstName} {e.lastName} — {e.position?.name}
                         </option>
                       ))}
                   </select>
@@ -602,7 +605,7 @@ export default function Settings() {
                       .filter((e) => e.id !== exclusionForm.employeeAId)
                       .map((e) => (
                         <option key={e.id} value={e.id}>
-                          {e.firstName} {e.lastName} — {e.position}
+                          {e.firstName} {e.lastName} — {e.position?.name}
                         </option>
                       ))}
                   </select>
@@ -651,17 +654,16 @@ export default function Settings() {
               <form onSubmit={addPositionLimit} className="mb-5 space-y-3">
                 <div>
                   <label className="text-sm font-medium">Cargo / Posición</label>
-                  <input
-                    list="positions-datalist"
-                    value={posLimitForm.position}
-                    onChange={(e) => setPosLimitForm({ ...posLimitForm, position: e.target.value })}
+                  <Select
+                    value={posLimitForm.positionId}
+                    onChange={(e) => setPosLimitForm({ ...posLimitForm, positionId: e.target.value })}
                     required
-                    placeholder="Ej: Operador Mesa de Ayuda"
-                    className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <datalist id="positions-datalist">
-                    {uniquePositions.map((p) => <option key={p} value={p} />)}
-                  </datalist>
+                  >
+                    <option value="">Selecciona...</option>
+                    {positions.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </Select>
                 </div>
                 <Input
                   label="Límite máximo simultáneo"
@@ -683,7 +685,7 @@ export default function Settings() {
                   {positionLimits.map((pl) => (
                     <div key={pl.id} className="flex items-center justify-between rounded-lg border border-border bg-background p-3">
                       <div className="text-sm">
-                        <span className="font-medium">{pl.position}</span>
+                        <span className="font-medium">{pl.position?.name || 'Desconocido'}</span>
                         <span className="ml-2 text-muted-foreground">— Máximo {pl.maxEmployees} a la vez</span>
                       </div>
                       <button

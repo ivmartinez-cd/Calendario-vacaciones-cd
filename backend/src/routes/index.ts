@@ -11,6 +11,7 @@ import holidayRoutes from './holiday.routes';
 import settingsRoutes from './settings.routes';
 import cycleRoutes from './cycle.routes';
 import userRoutes from './user.routes';
+import positionRoutes from './position.routes';
 
 const router = Router();
 
@@ -28,5 +29,6 @@ router.use('/holidays', holidayRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/cycles', cycleRoutes);
 router.use('/users', userRoutes);
+router.use('/positions', positionRoutes);
 
 export default router;

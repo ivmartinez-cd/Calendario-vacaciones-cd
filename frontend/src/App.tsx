@@ -16,6 +16,7 @@ const Requests = lazy(() => import('./pages/Requests'));
 const Approvals = lazy(() => import('./pages/Approvals'));
 const Employees = lazy(() => import('./pages/Employees'));
 const Departments = lazy(() => import('./pages/Departments'));
+const Positions = lazy(() => import('./pages/Positions'));
 const Reports = lazy(() => import('./pages/Reports'));
 const Audit = lazy(() => import('./pages/Audit'));
 const Holidays = lazy(() => import('./pages/Holidays'));
@@ -59,6 +60,7 @@ export default function App() {
         <Route path="/vacations/approvals" element={<ProtectedRoute managerOrAdmin><Approvals /></ProtectedRoute>} />
         <Route path="/vacations/employees" element={<ProtectedRoute adminOnly><Employees /></ProtectedRoute>} />
         <Route path="/vacations/departments" element={<ProtectedRoute adminOnly><Departments /></ProtectedRoute>} />
+        <Route path="/vacations/positions" element={<ProtectedRoute adminOnly><Positions /></ProtectedRoute>} />
         <Route path="/vacations/reports" element={<ProtectedRoute adminOnly><Reports /></ProtectedRoute>} />
         <Route path="/vacations/holidays" element={<ProtectedRoute adminOnly><Holidays /></ProtectedRoute>} />
         <Route path="/vacations/audit" element={<ProtectedRoute adminOnly><Audit /></ProtectedRoute>} />
