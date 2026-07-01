@@ -68,3 +68,51 @@ export function buildDecisionEmail(
     <p style="color:#6b7280;font-size:12px">Canal Directo — Vacaciones</p>
   </div>`;
 }
+
+export function buildRequestNotificationEmail(
+  employeeName: string,
+  departmentName: string,
+  start: string,
+  end: string,
+  days: number,
+  year: number,
+  frontendUrl: string,
+  reason?: string | null,
+): string {
+  const approvalLink = `${frontendUrl}/vacations/approvals`;
+  return `
+  <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:auto">
+    <h2 style="color:#2563eb">Nueva solicitud de vacaciones recibida</h2>
+    <p>Hola,</p>
+    <p>El empleado <strong>${employeeName}</strong> del sector <strong>${departmentName}</strong> ha registrado una nueva solicitud de vacaciones.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
+      <tr>
+        <td style="padding:8px 0;color:#6b7280;width:150px">Desde:</td>
+        <td style="padding:8px 0;font-weight:600">${start}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;color:#6b7280">Hasta:</td>
+        <td style="padding:8px 0;font-weight:600">${end}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;color:#6b7280">Días solicitados:</td>
+        <td style="padding:8px 0;font-weight:600">${days}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;color:#6b7280">Año correspondiente:</td>
+        <td style="padding:8px 0;font-weight:600">${year}</td>
+      </tr>
+      ${reason ? `
+      <tr>
+        <td style="padding:8px 0;color:#6b7280;vertical-align:top">Motivo:</td>
+        <td style="padding:8px 0;font-style:italic">${reason}</td>
+      </tr>
+      ` : ''}
+    </table>
+    <div style="margin:24px 0">
+      <a href="${approvalLink}" style="background-color:#2563eb;color:#ffffff;padding:10px 18px;text-decoration:none;border-radius:6px;font-weight:500;display:inline-block">Revisar solicitud en el sistema</a>
+    </div>
+    <hr style="border:none;border-top:1px solid #e5e7eb"/>
+    <p style="color:#6b7280;font-size:12px">Canal Directo — Vacaciones</p>
+  </div>`;
+}

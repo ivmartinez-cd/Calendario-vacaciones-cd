@@ -8,7 +8,8 @@ import { getEmployeeBalance } from '../services/vacation.service';
 import { ensureCycle } from '../services/cycle.service';
 import { recordAudit } from '../services/audit.service';
 import { notifyUser } from '../services/notification.service';
-import { sendMail, buildDecisionEmail } from '../utils/email';
+import { sendMail, buildDecisionEmail, buildRequestNotificationEmail } from '../utils/email';
+import { env } from '../config/env';
 
 export const createRequestSchema = z
   .object({
@@ -322,6 +323,55 @@ export async function create(req: Request, res: Response) {
   });
 
   await recordAudit({ action: 'CREATE', entity: 'VacationRequest', entityId: request.id, userId: req.user!.sub, metadata: { employee: `${request.employee.firstName} ${request.employee.lastName}`, startDate: toDateString(body.startDate), endDate: toDateString(body.endDate), days } });
+
+  // Enviar email de notificación a administradores y managers del sector.
+  try {
+    const managers = await prisma.user.findMany({
+      where: {
+        role: Role.MANAGER,
+        managedDepartmentId: request.employee.departmentId,
+      },
+      select: { email: true },
+    });
+
+    const admins = await prisma.user.findMany({
+      where: {
+        role: Role.ADMIN,
+      },
+      select: { email: true },
+    });
+
+    const recipientEmails = Array.from(
+      new Set([
+        ...managers.map((m) => m.email),
+        ...admins.map((a) => a.email),
+      ])
+    );
+
+    const fmt = (d: Date) => formatDateAR(d);
+
+    for (const email of recipientEmails) {
+      sendMail({
+        to: email,
+        subject: `Nueva solicitud de vacaciones — ${request.employee.firstName} ${request.employee.lastName} — Canal Directo`,
+        html: buildRequestNotificationEmail(
+          `${request.employee.firstName} ${request.employee.lastName}`,
+          request.employee.department.name,
+          fmt(request.startDate),
+          fmt(request.endDate),
+          request.daysRequested,
+          request.chargedToYear || request.startDate.getFullYear(),
+          env.frontendUrl,
+          request.reason,
+        ),
+      }).catch((err) => {
+        console.error(`Error enviando email a ${email}:`, err.message);
+      });
+    }
+  } catch (emailErr) {
+    console.error('Error al preparar/enviar notificaciones de nueva solicitud:', emailErr);
+  }
+
   res.status(201).json(request);
 }
 

@@ -290,10 +290,10 @@ export default function Login() {
             <img src="/logo-white.svg" alt="Canal Directo" className="h-12 w-auto mb-10" />
             <div className="w-12 h-0.5 bg-[#F7941D] mb-8 rounded-full" />
             <h1 className="text-2xl font-bold text-white leading-snug">
-              Sistema de Gestión<br />de Vacaciones
+              Sistema de Gestión<br />Humana
             </h1>
             <p className="mt-4 text-sm text-white/50 leading-relaxed">
-              Administrá solicitudes, calendarios de equipo y ciclos anuales de vacaciones de manera centralizada.
+              Administrá solicitudes de licencias, inasistencias y datos del personal de manera centralizada.
             </p>
           </div>
         </div>

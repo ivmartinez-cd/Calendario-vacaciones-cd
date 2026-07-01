@@ -59,6 +59,7 @@ model Employee {
   exclusionsA        VacationExclusion[] @relation("ExclusionsA")
   exclusionsB        VacationExclusion[] @relation("ExclusionsB")
   vacationRequests   VacationRequest[]
+  absences           Absence[]
 }
 
 /// Solicitud de vacaciones de un empleado.
@@ -185,6 +186,25 @@ model Position {
   overlapLimit PositionOverlapLimit?
 }
 
+/// Registra inasistencias, licencias médicas y otros estados especiales de un empleado.
+model Absence {
+  id         String        @id @default(uuid())
+  startDate  DateTime
+  endDate    DateTime
+  daysCount  Int
+  type       AbsenceType
+  reason     String?
+  status     RequestStatus @default(APPROVED)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  employeeId String
+  employee   Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([type])
+  @@index([startDate, endDate])
+}
+
 /// Registro de auditoría de cambios.
 model AuditLog {
   id        String   @id @default(uuid())
@@ -220,4 +240,13 @@ enum RequestStatus {
 enum ApprovalDecision {
   APPROVED
   REJECTED
+}
+
+enum AbsenceType {
+  DESCUENTO_DIA
+  BAJA_ENFERMEDAD
+  TRAMITE_PERSONAL
+  GUARDIA
+  DIA_ESTUDIO
+  OTHER
 }

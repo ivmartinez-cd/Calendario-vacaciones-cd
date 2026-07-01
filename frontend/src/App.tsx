@@ -8,10 +8,9 @@ const Login = lazy(() => import('./pages/Login'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Portal = lazy(() => import('./pages/Portal'));
-const AttendancePlaceholder = lazy(() => import('./pages/AttendancePlaceholder'));
+const Attendance = lazy(() => import('./pages/Attendance'));
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
-const TeamCalendar = lazy(() => import('./pages/TeamCalendar'));
 const Requests = lazy(() => import('./pages/Requests'));
 const Approvals = lazy(() => import('./pages/Approvals'));
 const Employees = lazy(() => import('./pages/Employees'));
@@ -21,6 +20,7 @@ const Reports = lazy(() => import('./pages/Reports'));
 const Audit = lazy(() => import('./pages/Audit'));
 const Holidays = lazy(() => import('./pages/Holidays'));
 const Settings = lazy(() => import('./pages/Settings'));
+const UsersAndRoles = lazy(() => import('./pages/UsersAndRoles'));
 
 function PageLoader() {
   return (
@@ -31,8 +31,8 @@ function PageLoader() {
 }
 
 function RootRedirect() {
-  const { isAdmin } = useAuth();
-  return <Navigate to={isAdmin ? '/portal' : '/vacations'} replace />;
+  const { isAdmin, isManager } = useAuth();
+  return <Navigate to={(isAdmin || isManager) ? '/portal' : '/vacations'} replace />;
 }
 
 export default function App() {
@@ -47,22 +47,22 @@ export default function App() {
         {/* Raíz: redirige según rol */}
         <Route path="/" element={<ProtectedRoute noLayout><RootRedirect /></ProtectedRoute>} />
 
-        {/* Portal de selección (solo admin) */}
-        <Route path="/portal" element={<ProtectedRoute adminOnly noLayout><Portal /></ProtectedRoute>} />
+        {/* Portal de selección (admin y managers) */}
+        <Route path="/portal" element={<ProtectedRoute managerOrAdmin noLayout><Portal /></ProtectedRoute>} />
 
-        {/* Módulo: Asistencias (futuro) */}
-        <Route path="/attendance/*" element={<ProtectedRoute adminOnly noLayout><AttendancePlaceholder /></ProtectedRoute>} />
+        {/* Módulo: Registro de Asistencias (bajas/inasistencias) */}
+        <Route path="/attendance/*" element={<ProtectedRoute managerOrAdmin><Attendance /></ProtectedRoute>} />
 
         {/* Módulo: Vacaciones */}
         <Route path="/vacations" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/vacations/calendar" element={<ProtectedRoute><TeamCalendar /></ProtectedRoute>} />
         <Route path="/vacations/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
         <Route path="/vacations/approvals" element={<ProtectedRoute managerOrAdmin><Approvals /></ProtectedRoute>} />
-        <Route path="/vacations/employees" element={<ProtectedRoute adminOnly><Employees /></ProtectedRoute>} />
-        <Route path="/vacations/departments" element={<ProtectedRoute adminOnly><Departments /></ProtectedRoute>} />
-        <Route path="/vacations/positions" element={<ProtectedRoute adminOnly><Positions /></ProtectedRoute>} />
+        <Route path="/hr/employees" element={<ProtectedRoute adminOnly><Employees /></ProtectedRoute>} />
+        <Route path="/hr/departments" element={<ProtectedRoute adminOnly><Departments /></ProtectedRoute>} />
+        <Route path="/hr/positions" element={<ProtectedRoute adminOnly><Positions /></ProtectedRoute>} />
         <Route path="/vacations/reports" element={<ProtectedRoute adminOnly><Reports /></ProtectedRoute>} />
-        <Route path="/vacations/holidays" element={<ProtectedRoute adminOnly><Holidays /></ProtectedRoute>} />
+        <Route path="/hr/holidays" element={<ProtectedRoute adminOnly><Holidays /></ProtectedRoute>} />
+        <Route path="/hr/users" element={<ProtectedRoute adminOnly><UsersAndRoles /></ProtectedRoute>} />
         <Route path="/vacations/audit" element={<ProtectedRoute adminOnly><Audit /></ProtectedRoute>} />
         <Route path="/vacations/settings" element={<ProtectedRoute adminOnly><Settings /></ProtectedRoute>} />
       </Routes>

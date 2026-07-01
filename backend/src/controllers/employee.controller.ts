@@ -71,6 +71,20 @@ export async function list(req: Request, res: Response) {
       AND: [
         effectiveDepartmentId ? { departmentId: effectiveDepartmentId } : {},
         status ? { status: status as EmployeeStatus } : {},
+        isManager
+          ? {
+              OR: [
+                {
+                  NOT: {
+                    user: {
+                      role: { in: [Role.MANAGER, Role.ADMIN] },
+                    },
+                  },
+                },
+                { id: req.user!.employeeId ?? '' },
+              ],
+            }
+          : {},
         search
           ? {
               OR: [

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { CalendarRange, ClipboardList, LogOut, ChevronRight } from 'lucide-react';
+import { CalendarRange, ClipboardList, LogOut, ChevronRight, Users } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const modules = [
@@ -16,16 +16,28 @@ const modules = [
     key: 'attendance',
     title: 'Registro de Asistencias',
     description:
-      'Monitoreo del ingreso y egreso del personal, control de horarios, horas extras y ausentismo del equipo.',
+      'Registro y seguimiento de bajas e inasistencias: descuentos de día, enfermedad, trámites personales, guardias y días de estudio.',
     path: '/attendance',
     icon: ClipboardList,
-    available: false,
+    available: true,
+  },
+  {
+    key: 'hr',
+    title: 'Gestión Humana',
+    description:
+      'Administración global de personal: altas y bajas de empleados, sectores de trabajo, cargos de la empresa y feriados nacionales compartidos.',
+    path: '/hr/employees',
+    icon: Users,
+    available: true,
+    adminOnly: true,
   },
 ] as const;
 
 export default function Portal() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
+
+  const visibleModules = modules.filter((mod) => !('adminOnly' in mod && mod.adminOnly) || isAdmin);
 
   return (
     <div className="flex min-h-screen flex-col bg-[#1a1a1a] text-white">
@@ -61,7 +73,7 @@ export default function Portal() {
         </div>
 
         <div className="grid w-full max-w-3xl gap-4 sm:grid-cols-2">
-          {modules.map((mod) => (
+          {visibleModules.map((mod) => (
             <div
               key={mod.key}
               onClick={() => mod.available && navigate(mod.path)}

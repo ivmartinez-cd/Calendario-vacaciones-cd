@@ -69,6 +69,30 @@ export const swaggerSpec = {
     '/vacations/{id}/decision': {
       post: { tags: ['Vacaciones'], summary: 'Aprobar / rechazar (admin)', responses: { '200': { description: 'OK' } } },
     },
+    '/absences': {
+      get: {
+        tags: ['Asistencias'],
+        summary: 'Listar bajas/inasistencias',
+        parameters: [
+          { name: 'employeeId', in: 'query', schema: { type: 'string' } },
+          { name: 'type', in: 'query', schema: { type: 'string', enum: ['DESCUENTO_DIA', 'BAJA_ENFERMEDAD', 'TRAMITE_PERSONAL', 'GUARDIA', 'DIA_ESTUDIO', 'OTHER'] } },
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['PENDING', 'APPROVED', 'REJECTED'] } },
+          { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: { '200': { description: 'OK' } },
+      },
+      post: {
+        tags: ['Asistencias'],
+        summary: 'Registrar una baja (individual o masiva vía employeeIds, admin)',
+        responses: { '201': { description: 'Creada' }, '409': { description: 'Solapamiento con otra baja o vacaciones' } },
+      },
+    },
+    '/absences/{id}': {
+      get: { tags: ['Asistencias'], summary: 'Detalle de una baja', responses: { '200': { description: 'OK' }, '404': { description: 'No encontrada' } } },
+      put: { tags: ['Asistencias'], summary: 'Actualizar o cambiar estado (admin)', responses: { '200': { description: 'OK' } } },
+      delete: { tags: ['Asistencias'], summary: 'Eliminar / cancelar baja', responses: { '204': { description: 'Sin contenido' } } },
+    },
     '/reports': {
       get: { tags: ['Reportes'], summary: 'Datos de reportes (admin)', responses: { '200': { description: 'OK' } } },
     },

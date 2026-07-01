@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
-  CalendarDays,
   CalendarCheck,
   ClipboardCheck,
   BarChart3,
@@ -18,6 +17,8 @@ import {
   Settings,
   LayoutGrid,
   Briefcase,
+  Calendar,
+  ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -33,27 +34,50 @@ interface NavItem {
   managerOrAdmin?: boolean;
 }
 
-const navItems: NavItem[] = [
+const vacationNavItems: NavItem[] = [
   { to: '/vacations', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/vacations/calendar', label: 'Calendario de equipo', icon: CalendarDays },
   { to: '/vacations/requests', label: 'Mis solicitudes', icon: CalendarCheck },
   { to: '/vacations/approvals', label: 'Aprobaciones', icon: ClipboardCheck, managerOrAdmin: true },
-  { to: '/vacations/employees', label: 'Empleados', icon: Users, adminOnly: true },
-  { to: '/vacations/departments', label: 'Sectores', icon: Building2, adminOnly: true },
-  { to: '/vacations/positions', label: 'Cargos', icon: Briefcase, adminOnly: true },
-  { to: '/vacations/holidays', label: 'Feriados', icon: PartyPopper, adminOnly: true },
   { to: '/vacations/reports', label: 'Reportes', icon: BarChart3, adminOnly: true },
   { to: '/vacations/audit', label: 'Auditoría', icon: ScrollText, adminOnly: true },
   { to: '/vacations/settings', label: 'Configuración', icon: Settings, adminOnly: true },
+];
+
+const attendanceNavItems: NavItem[] = [
+  { to: '/attendance', label: 'Vista Calendario', icon: LayoutDashboard },
+  { to: '/attendance/list', label: 'Listado y Registros', icon: ScrollText },
+];
+
+const hrNavItems: NavItem[] = [
+  { to: '/hr/employees', label: 'Empleados', icon: Users, adminOnly: true },
+  { to: '/hr/departments', label: 'Sectores', icon: Building2, adminOnly: true },
+  { to: '/hr/positions', label: 'Cargos', icon: Briefcase, adminOnly: true },
+  { to: '/hr/holidays', label: 'Feriados', icon: PartyPopper, adminOnly: true },
+  { to: '/hr/users', label: 'Usuarios y Roles', icon: ShieldCheck, adminOnly: true },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, isAdmin, isManager, logout } = useAuth();
   const { theme, toggle } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const items = navItems.filter((i) => {
+  const isAttendanceRoute = location.pathname.startsWith('/attendance');
+  const isHrRoute = location.pathname.startsWith('/hr');
+
+  let activeNavItems = vacationNavItems;
+  let sidebarTitle = 'Gestión de Vacaciones';
+
+  if (isAttendanceRoute) {
+    activeNavItems = attendanceNavItems;
+    sidebarTitle = 'Gestión de Asistencias';
+  } else if (isHrRoute) {
+    activeNavItems = hrNavItems;
+    sidebarTitle = 'Gestión Humana';
+  }
+
+  const items = activeNavItems.filter((i) => {
     if (i.adminOnly) return isAdmin;
     if (i.managerOrAdmin) return isAdmin || isManager;
     return true;
@@ -73,7 +97,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="flex h-[72px] flex-col items-center justify-center border-b border-white/10 px-6 gap-0.5">
           <img src="/logo-white.svg" alt="Canal Directo" className="h-8 w-auto" />
           <span className="text-[9px] font-semibold tracking-[0.2em] text-white/40 uppercase mt-1">
-            Gestión de Vacaciones
+            {sidebarTitle}
           </span>
         </div>
 
@@ -83,7 +107,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === '/vacations'}
+              end={item.to === '/vacations' || item.to === '/attendance' || item.to === '/hr/employees'}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
                 cn(
@@ -128,7 +152,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </button>
           <div className="flex-1" />
           <div className="flex items-center gap-1.5">
-            {isAdmin && (
+            {(isAdmin || isManager) && (
               <button
                 onClick={() => navigate('/portal')}
                 className="mr-1 flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition"
